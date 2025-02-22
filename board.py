@@ -217,10 +217,8 @@ class Board:
             ):
 
                 # Check if the last moved pawn is adjacent
-                if (
-                    abs(last_move_end[1] - start[1]) == 1
-                ):  # Pawn must be in an adjacent file
-                    if last_move_end[0] == start[0]:  # Must be on the same rank
+                if abs(last_move_end[1] - start[1]) == 1:
+                    if last_move_end[0] == start[0]:
                         # Check if en passant is valid for white
                         if (
                             piece.color == "w"
@@ -301,9 +299,9 @@ class Board:
 
             # **🔹 Pawn Promotion Handling**
             if isinstance(piece, Pawn) and (end_row == 0 or end_row == 7):
-                self.draw(game.screen)  # Redraw the board before asking for promotion
+                self.draw(game.screen)
                 promoted_piece = game.ask_promotion_choice(
-                    piece.color
+                    piece, (end_row, end_col)
                 )  # Get promoted piece
                 self.board[end_row][
                     end_col
@@ -581,4 +579,17 @@ class Board:
         Returns:
             bool: True if the game is in stalemate, False otherwise.
         """
-        pass
+        if self.is_check(color):
+            return False  # Can't be stalemate if in check
+
+        # Loop over all pieces of the given color
+        for row in range(ROWS):
+            for col in range(COLS):
+                piece = self.board[row][col]
+                if piece and piece.color == color:
+                    if piece.valid_moves(
+                        self
+                    ):  # If the piece has ANY valid moves, no stalemate
+                        return False
+
+        return True  # No moves available, so it's stalemate

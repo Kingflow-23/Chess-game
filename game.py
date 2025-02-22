@@ -222,7 +222,7 @@ class Game:
                 # Place the piece back to its start position
                 self.board.board[start_row][start_col] = piece
                 self.board.board[end_row][end_col] = None  # Clear the end position
-
+                    
                 if was_en_passant and captured_piece:
                     # If en passant, restore the captured pawn at its original square
                     captured_row = end_row + 1 if piece.color == "w" else end_row - 1
@@ -248,6 +248,11 @@ class Game:
             # Update the king and rook moved flags
             if isinstance(piece, King) and king_moved:
                 self.board.king_moved[piece.color] = king_moved[piece.color]
+                if piece.color == "w":
+                    self.board.white_king = (start_row, start_col)
+                else:
+                    self.board.black_king = (start_row, start_col)
+                        
             if isinstance(piece, Rook) and rook_moved:
                 self.board.rook_moved[
                     f"{piece.color}_{'kingside' if piece.col >= 4 else 'queenside'}"
@@ -320,12 +325,9 @@ class Game:
 
             # Handle promotion
             if was_promotion:
-                self.board.board[end_row][end_col] = Queen(
-                    end_row, end_col, piece.color
-                )  # Promote to Queen
-            if captured_piece:
-                # If a piece was captured, restore it to the correct position
-                self.board.board[start_row][start_col] = captured_piece
+                self.board.board[end_row][end_col] = self.ask_promotion_choice(
+                    piece, (end_row, end_col)
+                )
 
             # Update the piece's row and col
             piece.row = end_row
@@ -334,6 +336,11 @@ class Game:
             # Update the king and rook moved flags
             if isinstance(piece, King):
                 self.board.king_moved[piece.color] = king_moved[piece.color]
+                if piece.color == "w":
+                    self.board.white_king = (end_row, end_col)
+                else:
+                    self.board.black_king = (end_row, end_col)
+                    
             if isinstance(piece, Rook):
                 self.board.rook_moved[
                     f"{piece.color}_{'kingside' if piece.col >= 4 else 'queenside'}"
@@ -347,7 +354,7 @@ class Game:
             # Add this move back to the move history
             self.move_history.append(next_move)
 
-    def ask_promotion_choice(self, color):
+    def ask_promotion_choice(self, pawn, end_move):
         """
         Opens a promotion menu next to the game window, showing promotion choices without covering the board.
         Highlights a piece only when hovered.
@@ -356,7 +363,7 @@ class Game:
         piece_classes = {"q": Queen, "r": Rook, "b": Bishop, "n": Knight}
 
         # Get piece images
-        piece_images = {choice: PIECES[f"{color}{choice}"] for choice in choices}
+        piece_images = {choice: PIECES[f"{pawn.color}{choice}"] for choice in choices}
 
         menu_y = HEIGHT // 2 - (SQUARE_SIZE // 2)  # Centered vertically
         menu_x = (WIDTH // 2) - (2 * SQUARE_SIZE)  # Centered horizontally
@@ -397,7 +404,202 @@ class Game:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     for rect, choice in button_rects:
                         if rect.collidepoint(event.pos):
-                            return piece_classes[choice](0, 0, color)
+                            return piece_classes[choice](
+                                end_move[0], end_move[1], pawn.color
+                            )
+
+    def initialize_game_state(self):
+        """Initializes game state variables."""
+        self.move_history = []
+        self.future_moves = []
+        self.show_valid_moves = False
+        self.dragging_piece = False
+        self.offset_x, self.offset_y = 0, 0
+        self.last_move_piece = None
+        self.last_move_start, self.last_move_end = (-1, -1), (-1, -1)
+        self.was_there_enemy = False
+
+    def draw_board_and_pieces(self):
+        """Handles rendering of the board and pieces."""
+        self.board.draw(self.screen)
+
+        if self.selected_piece:
+            if self.show_valid_moves:
+                self.board.highlight_valid_moves(
+                    self.screen,
+                    self.selected_piece,
+                    (self.last_move_piece, self.last_move_start, self.last_move_end),
+                )
+
+            if self.dragging_piece:
+                temp_row, temp_col = self.selected_piece.row, self.selected_piece.col
+                self.board.board[temp_row][temp_col] = None  # Hide piece while dragging
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                self.screen.blit(
+                    self.selected_piece.image, (mouse_x - self.offset_x, mouse_y - self.offset_y)
+                )
+
+        self.board.highlight_last_move(
+            self.screen, (self.last_move_start, self.last_move_end), self.was_there_enemy
+        )
+
+    def handle_events(self):
+        """Handles user input events (mouse, keyboard)."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                self.handle_mouse_down(event)
+
+            elif event.type == pygame.MOUSEMOTION:
+                self.handle_mouse_motion()
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                self.handle_mouse_up(event)
+
+            elif event.type == pygame.KEYDOWN:
+                self.handle_key_press(event)
+
+    def handle_mouse_down(self, event):
+        """Handles mouse button press events."""
+        x, y = event.pos
+        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
+        piece = self.board.board[row][col]
+
+        if piece and piece.color == self.turn:
+            self.selected_piece = piece
+            self.dragging_piece = True
+            self.offset_x = x - col * SQUARE_SIZE
+            self.offset_y = y - row * SQUARE_SIZE
+            
+    def handle_mouse_motion(self):
+        """Handles mouse movement while dragging a piece."""
+        if self.dragging_piece and self.selected_piece:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            self.screen.blit(
+                self.selected_piece.image, (mouse_x - self.offset_x, mouse_y - self.offset_y)
+            )
+    
+    def handle_mouse_up(self, event):
+        """Handles when the mouse button is released (dropping a piece)."""
+        if not self.dragging_piece:
+            return
+
+        x, y = event.pos
+        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
+
+        if self.selected_piece and (row, col) in self.selected_piece.valid_moves(
+            self.board, (self.last_move_piece, self.last_move_start, self.last_move_end)
+        ):
+            self.perform_move(row, col)
+
+        else:
+            temp_row, temp_col = self.selected_piece.row, self.selected_piece.col
+            self.board.board[temp_row][temp_col] = self.selected_piece
+
+        self.dragging_piece = False
+        self.selected_piece = None
+        
+    def perform_move(self, row, col):
+        """Handles piece movement and game logic."""
+        self.future_moves.clear()
+        self.was_there_enemy = self.board.board[row][col] is not None
+        prev_piece, prev_start, prev_end = self.get_last_move()
+
+        captured_piece = self.get_captured_piece(row, col, prev_piece, prev_start, prev_end)
+
+        castling_move = isinstance(self.selected_piece, King) and self.board.is_castle(
+            self.selected_piece, (self.selected_piece.row, self.selected_piece.col), (row, col)
+        )
+
+        promotion_move = isinstance(self.selected_piece, Pawn) and (
+            (self.selected_piece.color == "w" and row == 0) or
+            (self.selected_piece.color == "b" and row == 7)
+        )
+
+        king_moved = self.board.king_moved.copy()
+        rook_moved = self.board.rook_moved.copy()
+
+        self.move_history.append({
+            "piece": self.selected_piece,
+            "start": (self.selected_piece.row, self.selected_piece.col),
+            "end": (row, col),
+            "captured": captured_piece,
+            "en_passant": self.board.is_en_passant(
+                self.selected_piece,
+                (self.selected_piece.row, self.selected_piece.col),
+                (row, col),
+                (prev_piece, prev_start, prev_end),
+            ),
+            "castling": castling_move,
+            "king_moved": king_moved,
+            "rook_moved": rook_moved,
+            "promotion": promotion_move,
+        })
+
+        self.board.move_piece(
+            self.selected_piece,
+            (self.selected_piece.row, self.selected_piece.col),
+            (row, col),
+            (prev_piece, prev_start, prev_end),
+            self,
+        )
+
+        self.last_move_piece = self.selected_piece
+        self.last_move_start = (self.selected_piece.row, self.selected_piece.col)
+        self.last_move_end = (row, col)
+
+        self.selected_piece.row = row
+        self.selected_piece.col = col
+        self.turn = "b" if self.turn == "w" else "w"
+
+        self.check_game_status()
+    
+    def get_last_move(self):
+        """Returns the last move details from history."""
+        if len(self.move_history) > 0:
+            last_move = self.move_history[-1]
+            return last_move["piece"], last_move["start"], last_move["end"]
+        return None, (0, 0), (0, 0)
+    
+    def get_captured_piece(self, row, col, prev_piece, prev_start, prev_end):
+        """Determines if a piece was captured during the move."""
+        if self.board.board[row][col]:
+            return self.board.board[row][col]
+        if self.board.is_en_passant(self.selected_piece, (self.selected_piece.row, self.selected_piece.col), (row, col), (prev_piece, prev_start, prev_end)):
+            return self.board.board[row - 1 if self.selected_piece.color == "b" else row + 1][col]
+        return None
+            
+    def check_game_status(self):
+        """Checks for checkmate or stalemate after a move."""
+        if self.board.is_checkmate(self.turn):
+            self.board.draw(self.screen)
+            self.running = False
+            self.endgame("Checkmate", self.turn)
+        elif self.board.is_stalemate(self.turn):
+            self.board.draw(self.screen)
+            self.running = False
+            self.endgame("Draw", self.turn)
+            
+    def handle_key_press(self, event):
+        """Handles keypress events."""
+        if event.key == pygame.K_BACKSPACE:
+            pygame.quit()
+            sys.exit()
+        elif event.key == pygame.K_RETURN:
+            self.__init__()
+            self.run(self.game_mode)
+        elif event.key == pygame.K_z:
+            message = f'{"White" if self.turn == "w" else "Black"} Surrender!'
+            self.running = False
+            self.endgame(message, self.turn)
+        elif event.key == pygame.K_s:
+            self.show_valid_moves = not self.show_valid_moves
+        elif event.key == pygame.K_b:
+            self.undo_move()
+        elif event.key == pygame.K_y:
+            self.advance_move()
 
     def run(self, mode):
         """
@@ -414,236 +616,11 @@ class Game:
         if mode == "help":
             self.display_help()
 
-        self.move_history = []  # List to store move history
-        self.future_moves = []  # List to store future moves (undone moves)
-
-        show_valid_moves = False  # Flag to show valid moves or not
-        dragging_piece = False  # Track if a piece is being dragged
-
-        offset_x, offset_y = 0, 0  # Track the offset between mouse and piece position
-
-        last_move_piece = None  # Track the last piece that was moved
-        last_move_start = (-1, -1)  # Track the start position of the last move
-        last_move_end = (-1, -1)  # Track the end position of the last move
-
-        was_there_enemy = (
-            False  # Flag to check if there was an enemy piece at the end position
-        )
+        self.initialize_game_state()
 
         while self.running:
-            self.board.draw(self.screen)
-
-            if self.selected_piece:
-                current_selected_piece = self.selected_piece
-
-                if show_valid_moves:
-                    self.board.highlight_valid_moves(
-                        self.screen,
-                        self.selected_piece,
-                        (last_move_piece, last_move_start, last_move_end),
-                    )
-
-                # Draw the selected piece at the mouse position if it's being dragged
-                if dragging_piece:
-                    temp_row, temp_col = (
-                        self.selected_piece.row,
-                        self.selected_piece.col,
-                    )
-                    self.board.board[temp_row][temp_col] = None  # Hide piece from board
-
-                    mouse_x, mouse_y = pygame.mouse.get_pos()
-                    self.screen.blit(
-                        self.selected_piece.image,
-                        (mouse_x - offset_x, mouse_y - offset_y),
-                    )
-
-            self.board.highlight_last_move(
-                self.screen, (last_move_start, last_move_end), was_there_enemy
-            )
-
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    x, y = event.pos
-                    col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
-                    piece = self.board.board[row][col]
-
-                    if piece and piece.color == self.turn:
-                        self.selected_piece = piece
-                        dragging_piece = True  # Start dragging
-                        offset_x = x - col * SQUARE_SIZE
-                        offset_y = y - row * SQUARE_SIZE
-
-                elif event.type == pygame.MOUSEMOTION:
-                    if dragging_piece and self.selected_piece:
-                        # Keep updating piece position with mouse
-                        mouse_x, mouse_y = pygame.mouse.get_pos()
-                        self.screen.blit(
-                            self.selected_piece.image,
-                            (mouse_x - offset_x, mouse_y - offset_y),
-                        )
-
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if dragging_piece:
-                        x, y = event.pos
-                        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
-
-                        # Try to move the piece if it's a valid move
-                        if self.selected_piece and (
-                            row,
-                            col,
-                        ) in self.selected_piece.valid_moves(
-                            self.board,
-                            (last_move_piece, last_move_start, last_move_end),
-                        ):
-
-                            # If a valid move is made, clear the redo stack (future moves)
-                            self.future_moves.clear()  # 🚀 This prevents advancing after a new move
-
-                            was_there_enemy = False
-
-                            # Store current move before updating last move
-                            current_move_start = (
-                                self.selected_piece.row,
-                                self.selected_piece.col,
-                            )
-                            current_move_end = (row, col)
-
-                            # Get the **previous** move from history (if available)
-                            if len(self.move_history) > 0:
-                                previous_move = self.move_history[
-                                    -1
-                                ]  # Last move in history
-                                prev_piece = previous_move["piece"]
-                                prev_start = previous_move["start"]
-                                prev_end = previous_move["end"]
-                            else:
-                                prev_piece, prev_start, prev_end = None, (0, 0), (0, 0)
-
-                            # Store the captured piece (if any)
-                            if self.board.board[row][col]:
-                                captured_piece = self.board.board[row][col]
-                            elif self.board.is_en_passant(
-                                current_selected_piece,
-                                (
-                                    current_selected_piece.row,
-                                    current_selected_piece.col,
-                                ),
-                                (row, col),
-                                (prev_piece, prev_start, prev_end),
-                            ):
-                                captured_piece = self.board.board[
-                                    (
-                                        row - 1
-                                        if self.selected_piece.color == "b"
-                                        else row + 1
-                                    )
-                                ][col]
-                            else:
-                                captured_piece = None
-
-                            if captured_piece:
-                                was_there_enemy = True
-
-                            # ✅ Detect castling
-                            castling_move = False
-                            if isinstance(self.selected_piece, King):
-                                castling_move = self.board.is_castle(
-                                    self.selected_piece,
-                                    current_move_start,
-                                    current_move_end,
-                                )
-
-                            # Record the move in the history (store the moved piece and destination state)
-                            self.move_history.append(
-                                {
-                                    "piece": self.selected_piece,
-                                    "start": current_move_start,
-                                    "end": current_move_end,
-                                    "captured": captured_piece,
-                                    "en_passant": self.board.is_en_passant(
-                                        self.selected_piece,
-                                        (
-                                            current_selected_piece.row,
-                                            current_selected_piece.col,
-                                        ),
-                                        (row, col),
-                                        (prev_piece, prev_start, prev_end),
-                                    ),
-                                    "castling": castling_move,
-                                    "king_moved": self.board.king_moved,
-                                    "rook_moved": self.board.rook_moved,
-                                    "promotion": False,
-                                }
-                            )
-
-                            # Perform the move
-                            self.board.move_piece(
-                                self.selected_piece,
-                                (self.selected_piece.row, self.selected_piece.col),
-                                (row, col),
-                                (prev_piece, prev_start, prev_end),
-                                self,
-                            )
-
-                            # Update piece's row and col to reflect its new position
-                            last_move_piece = self.selected_piece
-                            last_move_start = current_move_start
-                            last_move_end = current_move_end
-
-                            self.selected_piece.row = row
-                            self.selected_piece.col = col
-
-                            self.board.board[row][col] = self.selected_piece
-                            self.turn = "b" if self.turn == "w" else "w"
-
-                            if self.board.is_checkmate(self.turn):
-                                self.board.draw(self.screen)
-                                self.running = False
-                                self.endgame("Checkmate", self.turn)
-                            elif (
-                                self.board.is_stalemate(WHITE) and self.turn == "w"
-                            ) or (self.board.is_stalemate(BLACK) and self.turn == "b"):
-                                self.board.draw(self.screen)
-                                self.running = False
-                                self.endgame("Draw", self.turn)
-
-                        elif self.selected_piece and (
-                            row,
-                            col,
-                        ) not in self.selected_piece.valid_moves(
-                            self.board,
-                            (last_move_piece, last_move_start, last_move_end),
-                        ):
-                            # If the move is not valid, put the piece back in its original position
-                            self.board.board[temp_row][temp_col] = self.selected_piece
-
-                        # Stop dragging and restore the board
-                        dragging_piece = False
-                        self.selected_piece = None
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_BACKSPACE:
-                        pygame.quit()
-                        sys.exit()
-                    elif event.key == pygame.K_RETURN:
-                        self.__init__()
-                        self.run(self.game_mode)
-                    elif event.key == pygame.K_z:
-                        message = (
-                            f'{"White" if self.turn == "w" else "Black"} Surrender ! '
-                        )
-                        self.running = False
-                        self.endgame(message, self.turn)
-                    elif event.key == pygame.K_s:
-                        show_valid_moves = not show_valid_moves
-                    elif event.key == pygame.K_b:
-                        self.undo_move()
-                    elif event.key == pygame.K_y:
-                        self.advance_move()
-
+            self.draw_board_and_pieces()
+            self.handle_events()
             pygame.display.flip()
 
     def endgame(self, message, color):
@@ -664,7 +641,7 @@ class Game:
             game_state = font.render("It's a draw!", True, (0, 0, 0))
         else:
             game_state = font.render(
-                f"{message} : {'White wins' if self.turn == 'b' else 'Black wins'}",
+                f"{message} : {'White wins' if color == 'b' else 'Black wins'}",
                 True,
                 (0, 0, 0),
             )

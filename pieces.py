@@ -35,7 +35,6 @@ class Piece:
 
     def safe_moves(self, board, moves):
         """
-
         Filter out moves that would put the King in check.
 
         Args:
@@ -335,14 +334,12 @@ class King(Piece):
         castling = board.can_castle(
             self.color
         )  # Get dict {"kingside": True/False, "queenside": True/False}
-        row = 7 if self.color == "w" else 0  # Row where king is located
+        row = 7 if self.color == "w" else 0
 
-        # ✅ Kingside castling (Move to G file)
         if castling["kingside"]:
-            moves.append((row, 6))  # Move king to G
+            moves.append((row, 6))
 
-        # ✅ Queenside castling (Move to C file)
         if castling["queenside"]:
-            moves.append((row, 2))  # Move king to C
+            moves.append((row, 2))
 
         return moves
