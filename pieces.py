@@ -81,6 +81,12 @@ class Piece:
                 PIECES[piece_key], (self.col * SQUARE_SIZE, self.row * SQUARE_SIZE)
             )
 
+    def clone(self):
+        """
+        Creates a copy of the piece.
+        """
+        return type(self)(self.row, self.col, self.color)
+
 
 class Pawn(Piece):
     """
