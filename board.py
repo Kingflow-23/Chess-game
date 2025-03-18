@@ -23,6 +23,23 @@ class Board:
             "b_queenside": False,
         }
 
+    def clone(self):
+        """
+        Creates a copy of the board state without deep copying pygame surfaces.
+        """
+        # Create a new Board instance without calling __init__
+        new_board = Board.__new__(Board)
+        # Manually copy the board matrix using each piece's clone method
+        new_board.board = [
+            [piece.clone() if piece is not None else None for piece in row]
+            for row in self.board
+        ]
+        new_board.white_king = self.white_king
+        new_board.black_king = self.black_king
+        new_board.king_moved = self.king_moved.copy()
+        new_board.rook_moved = self.rook_moved.copy()
+        return new_board
+
     def create_board(self):
         """
         Initializes the board with chess pieces in their standard starting positions.
@@ -166,7 +183,7 @@ class Board:
         # Define colors
         yellow = (255, 255, 0)  # Normal move highlight
         red = (255, 0, 0)  # Capture highlight
-
+        
         # Highlight the start square (Yellow Border)
         pygame.draw.rect(
             screen,
@@ -177,9 +194,8 @@ class Board:
                 SQUARE_SIZE,
                 SQUARE_SIZE,
             ),
-            5,
+            SQUARE_SIZE,
         )
-
         # Highlight the destination square
         pygame.draw.rect(
             screen,
@@ -240,7 +256,7 @@ class Board:
 
         return False
 
-    def move_piece(self, piece, start_pos, end_pos, last_move, game):
+    def move_piece(self, piece, start_pos, end_pos, last_move=None, game=None):
         """
         Moves a piece on the board, handling special moves like en passant and promotion.
 
