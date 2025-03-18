@@ -1,8 +1,9 @@
 # Uninteresting folders 
 Lib/
+share/
 Scripts/
 Include/
-share/
+__pycache__/
 
 # Uninteresting files
 pyvenv.cfg
