@@ -1,0 +1,9 @@
+# Uninteresting folders 
+Lib/
+Scripts/
+Include/
+share/
+
+# Uninteresting files
+pyvenv.cfg
+test.ipynb
