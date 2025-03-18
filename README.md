@@ -13,42 +13,48 @@ This is a simple chess game implemented using Python and Pygame. It includes var
 ## Requirements:
 
 - Python 3.x. I used 3.10.11
-- Pygame library
 
-You can install Pygame by running the following command:
+I recommend you to use a virtual environment.
+
+```bash 
+python -m venv venv
+source venv/bin/activate # On Linux/Mac
+venv\Scripts\activate # On Windows
+``` 
 
 ```bash
-pip install pygame
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
 ## Folder Structure:
-Chess/
 
-├── background/             # Background for the ui
-
-│   └──      (title, etc ...)
-
-├── pieces/             # Images for chess pieces
-
-│   └──      (king, queen, bishop, etc.)
-
-├── board.py           # Handles the chessboard
-
-├── computer_player.py # Handles the computer player
-
-├── main.py      # Main game logic and UI
-
-├── pieces.py          # Contains piece classes like Pawn, Knight, etc.
-
-├── game.py          # Handles game workflow and rules
-
-├── settings.py     # Contains game settings
-
-└── README.md          # This file
+```
+📦 Chess-Game
+├── 📂 background/               # Contains background-related assets
+│
+├── 📂 pieces/                   # Contains individual chess piece assets or logic
+│
+├── 📂 src/                      # Main source code directory
+│   ├── board.py                 # Handles board representation and game logic
+│   ├── computer_player.py       # AI logic using Minimax and Alpha-Beta pruning
+│   ├── game.py                  # Game management (turns, win conditions, etc.)
+│   ├── pieces.py                # Defines chess piece behaviors and movements
+│   └── settings.py              # Configuration settings for the game
+│
+├── main.py                      # Entry point to start the game
+├── .gitignore                   # Specifies files to ignore in version control
+├── README.md                    # Project documentation
+└── requirements.txt             # Lists dependencies for installation
+```
 
 ## How to Play:
 
 1. **Start the Game**: Execute `main.py` to start playing.
+
+   ```bash 
+   python main.py
+   ```
 
     - First, You'll have to choose the opponent. You can choose between a friend or the computer.
     - If you choose a friend, you can play against each other on the same computer.
