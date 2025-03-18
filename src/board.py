@@ -195,7 +195,7 @@ class Board:
                 SQUARE_SIZE,
                 SQUARE_SIZE,
             ),
-            SQUARE_SIZE,
+            5,
         )
         # Highlight the destination square
         pygame.draw.rect(
