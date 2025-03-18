@@ -184,7 +184,7 @@ class Board:
         # Define colors
         yellow = (255, 255, 0)  # Normal move highlight
         red = (255, 0, 0)  # Capture highlight
-        
+
         # Highlight the start square (Yellow Border)
         pygame.draw.rect(
             screen,

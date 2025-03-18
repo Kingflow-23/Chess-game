@@ -12,7 +12,11 @@ class ComputerPlayer:
         self.opponent_color = "w" if color == "b" else "b"
 
     def minimax(self, board, depth, alpha, beta, maximizing):
-        if depth == 0 or board.is_checkmate(self.color) or board.is_checkmate(self.opponent_color):
+        if (
+            depth == 0
+            or board.is_checkmate(self.color)
+            or board.is_checkmate(self.opponent_color)
+        ):
             return self.evaluate_board(board), None
 
         best_move = None
@@ -22,7 +26,9 @@ class ComputerPlayer:
                 start_pos, end_pos = move
 
                 new_board = board.clone()
-                piece = new_board.board[start_pos[0]][start_pos[1]]  # Fetch the piece from the cloned board
+                piece = new_board.board[start_pos[0]][
+                    start_pos[1]
+                ]  # Fetch the piece from the cloned board
 
                 new_board.move_piece(piece, start_pos, end_pos)
 
@@ -40,7 +46,9 @@ class ComputerPlayer:
                 start_pos, end_pos = move
 
                 new_board = board.clone()
-                piece = new_board.board[start_pos[0]][start_pos[1]]  # Fetch the piece from the cloned board
+                piece = new_board.board[start_pos[0]][
+                    start_pos[1]
+                ]  # Fetch the piece from the cloned board
 
                 new_board.move_piece(piece, start_pos, end_pos)
 

@@ -513,7 +513,7 @@ class Game:
     def perform_move(self, row, col):
         """Handles piece movement and game logic."""
         self.future_moves.clear()
-        
+
         start_pos = (self.selected_piece.row, self.selected_piece.col)
         self.was_there_enemy = self.board.board[row][col] is not None
         prev_piece, prev_start, prev_end = self.get_last_move()
@@ -572,7 +572,12 @@ class Game:
         self.turn = "b" if self.turn == "w" else "w"
 
         self.board.draw(self.screen)
-
+        self.board.highlight_last_move(
+            self.screen,
+            (self.last_move_start, self.last_move_end),
+            self.was_there_enemy,
+        )
+        
         self.check_game_status()
 
     def get_last_move(self):
@@ -627,7 +632,7 @@ class Game:
         elif event.key == pygame.K_y:
             self.advance_move()
 
-    def computer_move(self, ai_name = "KF23"):
+    def computer_move(self):
         """
         Handles the computer's turn using Minimax.
         """
@@ -638,23 +643,22 @@ class Game:
             and self.turn == self.computer_player.color
             and not self.ai_moved
         ):
-            print(f"{'-'*20}")
-            print(f"{ai_name} is thinking...\n")
             move = self.computer_player.get_best_move(self.board)
             if move:
                 start_pos, end_pos = move
                 piece = self.board.board[start_pos[0]][start_pos[1]]
-                
+
                 # Store the AI's last move for highlighting
                 self.last_move_start = start_pos
                 self.last_move_end = end_pos
-                self.was_there_enemy = self.board.board[end_pos[0]][end_pos[1]] is not None  # Check if capture happened
-                
+                self.was_there_enemy = (
+                    self.board.board[end_pos[0]][end_pos[1]] is not None
+                )  # Check if capture happened
+
                 self.board.move_piece(
                     piece, start_pos, end_pos, (prev_piece, prev_start, prev_end), self
                 )
-                print(f"{ai_name} made a move !!\n")
-                
+
                 self.ai_moved = True
                 self.turn = "w"  # Switch turn to the player
 
@@ -678,7 +682,11 @@ class Game:
         while self.running:
             self.draw_board_and_pieces()
 
-            if self.game_mode == "pvc" and self.computer_player and self.turn == self.computer_player.color:
+            if (
+                self.game_mode == "pvc"
+                and self.computer_player
+                and self.turn == self.computer_player.color
+            ):
                 if not self.ai_moved:
                     self.computer_move()
             else:
