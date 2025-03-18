@@ -1,5 +1,5 @@
 from settings import *
-from typing import List, Tuple, Optional, Dict
+from typing import List, Tuple, Optional
 
 
 class Piece:

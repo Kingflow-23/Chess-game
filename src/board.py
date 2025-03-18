@@ -1,3 +1,5 @@
+from typing import List, Optional, Tuple, Dict, Any
+
 from settings import *
 
 from src.pieces import *
@@ -5,10 +7,11 @@ from src.pieces import *
 
 class Board:
     """
-    Represents a chessboard and manages game logic, including piece placement, movement, special rules, and game state checks.
+    Represents a chessboard and manages game logic, including piece placement, movement,
+    special rules, and game state checks.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Initializes the chessboard with pieces in their starting positions.
         Tracks the positions of kings and castling rights.
@@ -24,9 +27,14 @@ class Board:
             "b_queenside": False,
         }
 
-    def clone(self):
+    def clone(self) -> "Board":
         """
-        Creates a copy of the board state without deep copying pygame surfaces.
+        Creates and returns a deep copy of the board state.
+        This clone method duplicates the board matrix using each piece's clone method,
+        along with king and rook moved flags.
+
+        Returns:
+            Board: A new Board instance with the same state.
         """
         # Create a new Board instance without calling __init__
         new_board = Board.__new__(Board)
@@ -41,12 +49,13 @@ class Board:
         new_board.rook_moved = self.rook_moved.copy()
         return new_board
 
-    def create_board(self):
+    def create_board(self) -> List[List[Optional[Piece]]]:
         """
         Initializes the board with chess pieces in their standard starting positions.
 
         Returns:
-            list: A 2D list representing the chessboard with pieces placed accordingly.
+            List[List[Optional[Piece]]]: A 2D list representing the chessboard with pieces
+                                         placed in their starting positions.
         """
         board = [[None for _ in range(COLS)] for _ in range(ROWS)]
         starting_positions = [
@@ -79,9 +88,13 @@ class Board:
 
         return board
 
-    def draw(self, screen):
+    def draw(self, screen: pygame.Surface) -> None:
         """
-        Draws the chessboard, highlights the king in red if in check, and pieces.
+        Draws the chessboard along with all the pieces onto the provided screen.
+        Also highlights the king in red if it is in check.
+
+        Args:
+            screen (pygame.Surface): The display surface on which to draw the board.
         """
         # Determine if white or black king is in check
         white_in_check = self.is_check("w")
@@ -112,7 +125,12 @@ class Board:
                 if piece:
                     piece.draw(screen)
 
-    def highlight_valid_moves(self, screen, selected_piece, last_move):
+    def highlight_valid_moves(
+        self,
+        screen: pygame.Surface,
+        selected_piece: Piece,
+        last_move: Tuple[Any, Tuple[int, int], Tuple[int, int]],
+    ) -> None:
         """
         Highlights valid moves for the selected piece.
 
@@ -162,7 +180,12 @@ class Board:
                 10,
             )
 
-    def highlight_last_move(self, screen, last_move, was_there_enemy):
+    def highlight_last_move(
+        self,
+        screen: pygame.Surface,
+        last_move: Tuple[Tuple[int, int], Tuple[int, int]],
+        was_there_enemy: bool,
+    ) -> None:
         """
         Highlights the last move made on the board.
 
@@ -210,7 +233,13 @@ class Board:
             5,
         )
 
-    def is_en_passant(self, piece, start, end, last_move):
+    def is_en_passant(
+        self,
+        piece: Piece,
+        start: Tuple[int, int],
+        end: Tuple[int, int],
+        last_move: Tuple[Any, Tuple[int, int], Tuple[int, int]],
+    ) -> bool:
         """
         Checks if an en passant capture is possible.
 
@@ -257,9 +286,17 @@ class Board:
 
         return False
 
-    def move_piece(self, piece, start_pos, end_pos, last_move=None, game=None):
+    def move_piece(
+        self,
+        piece: Piece,
+        start_pos: Tuple[int, int],
+        end_pos: Tuple[int, int],
+        last_move: Optional[Tuple[Any, Tuple[int, int], Tuple[int, int]]] = None,
+        game: Optional[Any] = None,
+    ) -> None:
         """
-        Moves a piece on the board, handling special moves like en passant and promotion.
+        Moves a chess piece from start_pos to end_pos, handling special moves such as castling,
+        en passant, and pawn promotion.
 
         Args:
             piece (Piece): The chess piece being moved.
@@ -316,14 +353,20 @@ class Board:
 
             # **🔹 Pawn Promotion Handling**
             if isinstance(piece, Pawn) and (end_row == 0 or end_row == 7):
-                self.draw(game.screen)
-                promoted_piece = game.ask_promotion_choice(
-                    piece, (end_row, end_col)
-                )  # Get promoted piece
+                if game is not None:
+                    self.draw(game.screen)
+                    promoted_piece = game.ask_promotion_choice(
+                        piece, (end_row, end_col)
+                    )  # Get promoted piece
+                else:
+                    # Default to Queen if no game instance is provided
+                    promoted_piece = Queen(end_row, end_col, piece.color)
+                    
                 self.board[end_row][
                     end_col
                 ] = promoted_piece  # Replace pawn with new piece
                 promoted_piece.row, promoted_piece.col = end_row, end_col
+                
             else:
                 self.board[end_row][end_col] = piece
 
@@ -331,16 +374,16 @@ class Board:
             self.board[start_row][start_col] = None
             piece.row, piece.col = end_row, end_col
 
-    def can_castle(self, color):
+    def can_castle(self, color: str) -> Dict[str, bool]:
         """
-        Checks if castling is allowed for a given side ('kingside' or 'queenside').
+        Checks whether castling is legal for the given color.
 
         Args:
             color (str): The player's color ('w' or 'b').
 
         Returns:
-            dict: A dictionary indicating if castling is legal for each side.
-                Example: {"kingside": True, "queenside": False}
+            Dict[str, bool]: A dictionary indicating castling rights.
+                             For example: {"kingside": True, "queenside": False}.
         """
         row = 7 if color == "w" else 0
         king_col = 4
@@ -384,7 +427,9 @@ class Board:
 
         return castling_rights
 
-    def is_castle(self, piece, start, end):
+    def is_castle(
+        self, piece: Piece, start: Tuple[int, int], end: Tuple[int, int]
+    ) -> Optional[str]:
         """
         Determines if the given move is a castling move.
 
@@ -394,8 +439,8 @@ class Board:
             end (tuple): The ending position (row, col).
 
         Returns:
-            str: 'kingside' if kingside castling, 'queenside' if queenside castling,
-                None if not a castling move.
+            Optional[str]: 'kingside' if the move is kingside castling, 'queenside' if queenside castling,
+                           or None if the move is not a castling move.
         """
         if not isinstance(piece, King):  # Ensure it's a king
             return None
@@ -412,13 +457,16 @@ class Board:
 
         return None  # Not a castling move
 
-    def is_check(self, color, checked_pos=None):
+    def is_check(
+        self, color: str, checked_pos: Optional[Tuple[int, int]] = None
+    ) -> bool:
         """
-        Checks if the given player's king is in check.
+        Determines if the king of the specified color is in check.
 
         Args:
-            color (str): The player's color ('w' for white, 'b' for black').
-            checked_pos (tuple): The (row, col) position of the pos to check.
+            color (str): The player's color ('w' or 'b').
+            checked_pos (Optional[Tuple[int, int]]): The position to check;
+                                                     if None, uses the current king position.
 
         Returns:
             bool: True if the king is in check, False otherwise.
@@ -520,7 +568,7 @@ class Board:
 
         return False  # No check detected
 
-    def is_check_after_move(self, king, new_pos):
+    def is_check_after_move(self, king: King, new_pos: Tuple[int, int]) -> bool:
         """
         Simulates moving the King to a new position and checks if it would be in check.
 
@@ -561,7 +609,7 @@ class Board:
 
         return in_check
 
-    def is_checkmate(self, color):
+    def is_checkmate(self, color: str) -> bool:
         """
         Determines if the given player is in checkmate (no legal moves to escape check).
 
@@ -586,7 +634,7 @@ class Board:
 
         return True  # No moves escape check, so it's checkmate
 
-    def is_stalemate(self, color):
+    def is_stalemate(self, color: str) -> bool:
         """
         Determines if the given player is in stalemate (no legal moves, but not in check).
 

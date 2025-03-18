@@ -1,5 +1,6 @@
 import sys
 import pygame
+from typing import Tuple, Optional, Any
 
 from settings import *
 
@@ -209,6 +210,9 @@ class Game:
                         7
                     ].col = 7  # Restore rook's original column
 
+                    self.board.king_moved[piece.color] = False
+                    self.board.rook_moved[f"{piece.color}_kingside"] = False
+
             elif was_castling == "queenside":
                 self.board.board[start_row][start_col] = piece  # Restore the king
                 self.board.board[end_row][2] = None  # Clear the castled king's position
@@ -221,6 +225,9 @@ class Game:
                     self.board.board[start_row][
                         0
                     ].col = 0  # Restore rook's original column
+
+                    self.board.king_moved[piece.color] = False
+                    self.board.rook_moved[f"{piece.color}_queenside"] = False
 
             else:
                 # Place the piece back to its start position
@@ -251,18 +258,10 @@ class Game:
 
             # Update the king and rook moved flags
             if isinstance(piece, King) and king_moved:
-                self.board.king_moved[piece.color] = king_moved[piece.color]
                 if piece.color == "w":
                     self.board.white_king = (start_row, start_col)
                 else:
                     self.board.black_king = (start_row, start_col)
-
-            if isinstance(piece, Rook) and rook_moved:
-                self.board.rook_moved[
-                    f"{piece.color}_{'kingside' if piece.col >= 4 else 'queenside'}"
-                ] = rook_moved[
-                    f"{piece.color}_{'kingside' if piece.col >= 4 else 'queenside'}"
-                ]
 
             # Switch the turn back
             self.turn = "b" if self.turn == "w" else "w"
@@ -358,7 +357,7 @@ class Game:
             # Add this move back to the move history
             self.move_history.append(next_move)
 
-    def ask_promotion_choice(self, pawn, end_move):
+    def ask_promotion_choice(self, pawn: Pawn, end_move: Tuple[int, int]) -> Piece:
         """
         Opens a promotion menu next to the game window, showing promotion choices without covering the board.
         Highlights a piece only when hovered.
@@ -412,20 +411,33 @@ class Game:
                                 end_move[0], end_move[1], pawn.color
                             )
 
-    def initialize_game_state(self):
-        """Initializes game state variables."""
-        self.move_history = []
-        self.future_moves = []
-        self.show_valid_moves = False
-        self.dragging_piece = False
-        self.offset_x, self.offset_y = 0, 0
-        self.last_move_piece = None
-        self.last_move_start, self.last_move_end = (-1, -1), (-1, -1)
-        self.was_there_enemy = False
-        self.ai_moved = False
+    def initialize_game_state(self) -> None:
+        """
+        Initializes game state variables to their default values.
 
-    def draw_board_and_pieces(self):
-        """Handles rendering of the board and pieces."""
+        This includes clearing move and future move histories, resetting UI flags,
+        and setting initial last move values.
+        """
+        self.move_history: list = []
+        self.future_moves: list = []
+        self.show_valid_moves: bool = False
+        self.dragging_piece: bool = False
+        self.offset_x: int = 0
+        self.offset_y: int = 0
+        self.last_move_piece = None
+        self.last_move_start: Tuple[int, int] = (-1, -1)
+        self.last_move_end: Tuple[int, int] = (-1, -1)
+        self.was_there_enemy: bool = False
+        self.ai_moved: bool = False
+
+    def draw_board_and_pieces(self) -> None:
+        """
+        Renders the board and all pieces onto the screen.
+
+        First, it draws the board, then highlights valid moves if a piece is selected.
+        If a piece is being dragged, it draws the piece at the current mouse position.
+        Finally, it highlights the last move made.
+        """
         self.board.draw(self.screen)
 
         if self.selected_piece:
@@ -451,8 +463,12 @@ class Game:
             self.was_there_enemy,
         )
 
-    def handle_events(self):
-        """Handles user input events (mouse, keyboard)."""
+    def handle_events(self) -> None:
+        """
+        Processes all user input events (mouse, keyboard, and quit events).
+
+        Delegates mouse down, motion, up, and keypress events to their respective handlers.
+        """
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -469,8 +485,16 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 self.handle_key_press(event)
 
-    def handle_mouse_down(self, event):
-        """Handles mouse button press events."""
+    def handle_mouse_down(self, event: pygame.event.Event) -> None:
+        """
+        Handles mouse button press events.
+
+        Determines the board square where the click occurred and, if a piece of the current
+        turn's color is present, starts dragging that piece.
+
+        Args:
+            event (pygame.event.Event): The mouse button down event.
+        """
         x, y = event.pos
         col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
         piece = self.board.board[row][col]
@@ -481,7 +505,7 @@ class Game:
             self.offset_x = x - col * SQUARE_SIZE
             self.offset_y = y - row * SQUARE_SIZE
 
-    def handle_mouse_motion(self):
+    def handle_mouse_motion(self) -> None:
         """Handles mouse movement while dragging a piece."""
         if self.dragging_piece and self.selected_piece:
             mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -490,8 +514,16 @@ class Game:
                 (mouse_x - self.offset_x, mouse_y - self.offset_y),
             )
 
-    def handle_mouse_up(self, event):
-        """Handles when the mouse button is released (dropping a piece)."""
+    def handle_mouse_up(self, event: pygame.event.Event) -> None:
+        """
+        Handles mouse button release events (dropping a piece).
+
+        If the drop location is a valid move for the selected piece, the move is performed;
+        otherwise, the piece is returned to its original square.
+
+        Args:
+            event (pygame.event.Event): The mouse button up event.
+        """
         if not self.dragging_piece:
             return
 
@@ -510,8 +542,17 @@ class Game:
         self.dragging_piece = False
         self.selected_piece = None
 
-    def perform_move(self, row, col):
-        """Handles piece movement and game logic."""
+    def perform_move(self, row: int, col: int) -> None:
+        """
+        Executes a move for the selected piece and updates the game state.
+
+        This includes storing the move in history (with details for undo/redo), moving the piece,
+        handling special moves (castling, en passant, promotion), and switching turns.
+
+        Args:
+            row (int): The destination row.
+            col (int): The destination column.
+        """
         self.future_moves.clear()
 
         start_pos = (self.selected_piece.row, self.selected_piece.col)
@@ -519,7 +560,7 @@ class Game:
         prev_piece, prev_start, prev_end = self.get_last_move()
 
         captured_piece = self.get_captured_piece(
-            row, col, prev_piece, prev_start, prev_end
+            self.selected_piece, row, col, prev_piece, prev_start, prev_end
         )
 
         castling_move = isinstance(self.selected_piece, King) and self.board.is_castle(
@@ -577,33 +618,69 @@ class Game:
             (self.last_move_start, self.last_move_end),
             self.was_there_enemy,
         )
-        
+
         self.check_game_status()
 
-    def get_last_move(self):
-        """Returns the last move details from history."""
+    def get_last_move(self) -> Tuple[Optional[Any], Tuple[int, int], Tuple[int, int]]:
+        """
+        Retrieves details of the most recent move from the move history.
+
+        Returns:
+            A tuple containing:
+                - The piece that made the last move (or None if no moves have been made),
+                - The starting position (row, col) of the last move,
+                - The ending position (row, col) of the last move.
+        """
         if len(self.move_history) > 0:
             last_move = self.move_history[-1]
             return last_move["piece"], last_move["start"], last_move["end"]
         return None, (0, 0), (0, 0)
 
-    def get_captured_piece(self, row, col, prev_piece, prev_start, prev_end):
-        """Determines if a piece was captured during the move."""
+    def get_captured_piece(
+        self,
+        piece: Any,
+        row: int,
+        col: int,
+        prev_piece: Any,
+        prev_start: Tuple[int, int],
+        prev_end: Tuple[int, int],
+    ) -> Optional[Any]:
+        """
+        Determines if a capture occurred during a move.
+
+        This method checks:
+          1. Normal capture: If the destination square (row, col) is occupied.
+          2. En passant: If the move qualifies as an en passant capture.
+
+        Args:
+            piece: The piece being moved.
+            row (int): The destination row.
+            col (int): The destination column.
+            prev_piece: The piece involved in the previous move.
+            prev_start (Tuple[int, int]): The starting position of the previous move.
+            prev_end (Tuple[int, int]): The ending position of the previous move.
+
+        Returns:
+            The captured piece if one was captured; otherwise, None.
+        """
         if self.board.board[row][col]:
             return self.board.board[row][col]
         if self.board.is_en_passant(
-            self.selected_piece,
-            (self.selected_piece.row, self.selected_piece.col),
+            piece,
+            (piece.row, piece.col),
             (row, col),
             (prev_piece, prev_start, prev_end),
         ):
-            return self.board.board[
-                row - 1 if self.selected_piece.color == "b" else row + 1
-            ][col]
+            return self.board.board[row - 1 if piece.color == "b" else row + 1][col]
         return None
 
-    def check_game_status(self):
-        """Checks for checkmate or stalemate after a move."""
+    def check_game_status(self) -> None:
+        """
+        Checks for game-ending conditions (checkmate or stalemate).
+
+        If either condition is met, the board is redrawn, the game loop is terminated,
+        and the endgame message is displayed.
+        """
         if self.board.is_checkmate(self.turn):
             self.board.draw(self.screen)
             self.running = False
@@ -613,8 +690,21 @@ class Game:
             self.running = False
             self.endgame("Draw", self.turn)
 
-    def handle_key_press(self, event):
-        """Handles keypress events."""
+    def handle_key_press(self, event: pygame.event.Event) -> None:
+        """
+        Processes keypress events and executes corresponding game actions.
+
+        Supported keys:
+          - Backspace: Exit the game.
+          - Return: Restart the game.
+          - Z: Surrender.
+          - S: Toggle showing valid moves.
+          - B: Undo the last move.
+          - Y: Redo the previously undone move.
+
+        Args:
+            event (pygame.event.Event): The keypress event.
+        """
         if event.key == pygame.K_BACKSPACE:
             pygame.quit()
             sys.exit()
@@ -632,9 +722,12 @@ class Game:
         elif event.key == pygame.K_y:
             self.advance_move()
 
-    def computer_move(self):
+    def computer_move(self) -> None:
         """
-        Handles the computer's turn using Minimax.
+        Executes the computer's move using the Minimax algorithm.
+
+        Retrieves the best move for the AI, updates the board and move history, and
+        switches the turn back to the human player.
         """
         prev_piece, prev_start, prev_end = self.get_last_move()
 
@@ -646,6 +739,7 @@ class Game:
             move = self.computer_player.get_best_move(self.board)
             if move:
                 start_pos, end_pos = move
+                row, col = end_pos
                 piece = self.board.board[start_pos[0]][start_pos[1]]
 
                 # Store the AI's last move for highlighting
@@ -655,6 +749,43 @@ class Game:
                     self.board.board[end_pos[0]][end_pos[1]] is not None
                 )  # Check if capture happened
 
+                captured_piece = self.get_captured_piece(
+                    piece, row, col, prev_piece, prev_start, prev_end
+                )
+
+                castling_move = isinstance(piece, King) and self.board.is_castle(
+                    piece,
+                    (piece.row, piece.col),
+                    (row, col),
+                )
+
+                promotion_move = isinstance(piece, Pawn) and (
+                    (piece.color == "w" and row == 0)
+                    or (piece.color == "b" and row == 7)
+                )
+
+                king_moved = self.board.king_moved.copy()
+                rook_moved = self.board.rook_moved.copy()
+
+                self.move_history.append(
+                    {
+                        "piece": piece,
+                        "start": start_pos,
+                        "end": (row, col),
+                        "captured": captured_piece,
+                        "en_passant": self.board.is_en_passant(
+                            piece,
+                            (piece.row, piece.col),
+                            (row, col),
+                            (prev_piece, prev_start, prev_end),
+                        ),
+                        "castling": castling_move,
+                        "king_moved": king_moved,
+                        "rook_moved": rook_moved,
+                        "promotion": promotion_move,
+                    }
+                )
+
                 self.board.move_piece(
                     piece, start_pos, end_pos, (prev_piece, prev_start, prev_end), self
                 )
@@ -662,16 +793,15 @@ class Game:
                 self.ai_moved = True
                 self.turn = "w"  # Switch turn to the player
 
-    def run(self, mode):
+    def run(self, mode: str) -> None:
         """
-        Main game loop.
+        The main game loop.
 
-        This method is the core loop of the chess game. It handles the main game flow,
-        user input (keyboard and mouse events), and displays the game state (board, pieces, etc.).
-        It updates the board, handles player moves, and checks for game end conditions like checkmate or stalemate.
+        Manages the overall game flow, including user input handling, board rendering, AI moves,
+        and checking for game-ending conditions.
 
         Args:
-            mode (str): The mode of the game, either "help", "pvp", or "pvc". Determines the initial state of the game.
+            mode (str): The game mode ("help", "pvp", or "pvc"), which determines the initial game state.
         """
 
         if mode == "help":
@@ -695,17 +825,13 @@ class Game:
             self.handle_events()
             pygame.display.flip()
 
-    def endgame(self, message, color):
+    def endgame(self, message: str, color: str) -> None:
         """
-        Display endgame message.
-
-        This method displays the final message on the screen after the game ends. It shows either a draw or a win message
-        depending on the outcome of the game. Additionally, it provides instructions to the player on how to exit the game
-        or restart it.
+        Displays the endgame screen with a message and instructions for exit or replay.
 
         Args:
-            message (str): The message to display at the end of the game. Can be "Draw" or "Checkmate" or "Surrender".
-            color (str): The color of the player who has lost the game. ("w" for white, "b" for black).
+            message (str): The outcome message ("Draw", "Checkmate", or "Surrender").
+            color (str): The color of the player who lost ("w" for white, "b" for black).
         """
         font = pygame.font.Font(None, 48)
 
