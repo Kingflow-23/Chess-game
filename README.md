@@ -1,18 +1,25 @@
 # Chess Game - Python & Pygame
 
-This is a simple chess game implemented using Python and Pygame. It includes various features such as drag-and-drop piece movement, check/checkmate detection, en passant, castling, and an undo/redo functionality.
+This is a simple chess game implemented using Python and Pygame. It supports player-versus-player (PvP) and player-versus-computer (PvC) modes with many standard chess features, including drag-and-drop piece movement, check/checkmate detection, en passant, castling, and undo/redo functionality.
 
-## Features:
+---
+
+## Features
+
 - **PvP Mode**: Play against a friend on the same computer.
-- **Drag-and-Drop**: Move pieces by dragging them.
-- **Undo/Redo**: Undo moves with the `B` key, redo with the `Y` key.
-- **En Passant**: Support for the special pawn capture.
-- **Valid Move Highlighting**: Highlight possible moves when a piece is selected if enabled by pressing the `S` key.
-- **Check/Checkmate Detection**: Automatically detects checkmate and stalemate.
+- **PvC Mode**: Play against an AI that uses the Minimax algorithm with Alpha-Beta pruning.
+- **Drag-and-Drop Movement**: Click and drag pieces to move them.
+- **Undo/Redo Moves**: Use the `B` key to undo your last move and the `Y` key to redo an undone move.
+- **En Passant**: Special pawn capture is supported.
+- **Castling**: Both kingside and queenside castling are implemented (with all rules enforced).
+- **Valid Move Highlighting**: When enabled (by pressing the `S` key), possible moves for a selected piece are highlighted.
+- **Check/Checkmate/Stalemate Detection**: Automatically detects game-ending conditions.
+- **Pawn Promotion**: When a pawn reaches the opposite end, a prompt allows choosing a new piece (auto-promotion is used for AI moves).
 
 ## Requirements:
 
-- Python 3.x. I used 3.10.11
+- **Python 3.x**  
+  Recommended: Python 3.10.11
 
 I recommend you to use a virtual environment.
 
