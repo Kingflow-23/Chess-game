@@ -16,7 +16,8 @@ This is a simple chess game implemented using Python and Pygame. It features dra
 
 ## Requirements:
 
-- Python 3.x. I used 3.10.11
+- **Python 3.x**  
+  Recommended: Python 3.10.11
 
 I recommend you to use a virtual environment.
 
