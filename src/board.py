@@ -361,12 +361,12 @@ class Board:
                 else:
                     # Default to Queen if no game instance is provided
                     promoted_piece = Queen(end_row, end_col, piece.color)
-                    
+
                 self.board[end_row][
                     end_col
                 ] = promoted_piece  # Replace pawn with new piece
                 promoted_piece.row, promoted_piece.col = end_row, end_col
-                
+
             else:
                 self.board[end_row][end_col] = piece
 

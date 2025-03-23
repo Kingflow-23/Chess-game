@@ -1,4 +1,5 @@
 import sys
+import random
 import pygame
 from typing import Tuple, Optional, Any
 
@@ -107,7 +108,6 @@ class Game:
                         pvc_text = font.render(
                             "2. Player vs Computer", True, (255, 255, 0)
                         )
-                        self.computer_player = ComputerPlayer("b")
                     else:
                         pvc_text = font.render(
                             "2. Player vs Computer", True, (255, 255, 255)
@@ -117,6 +117,66 @@ class Game:
                         help_text = font.render("3. Help", True, (255, 255, 0))
                     else:
                         help_text = font.render("3. Help", True, (255, 255, 255))
+
+    def choose_color_menu(self, screen) -> Tuple[str, str]:
+        """
+        Displays an in-game menu for the player to choose their color or choose a random option.
+
+        Args:
+            screen (pygame.Surface): The game display surface.
+
+        Returns:
+            Tuple[str, str]: A tuple containing (player_color, computer_color)
+                            where each is either "w" or "b".
+        """
+        background = pygame.transform.scale(TITLE_BG, (WIDTH, HEIGHT))
+
+        font = pygame.font.Font(None, 60)
+        white_button = pygame.Rect(100, 125, 290, 100)
+        black_button = pygame.Rect(500, 125, 290, 100)
+        random_button = pygame.Rect(300, 350, 275, 100)
+
+        running = True
+        player_color = None
+
+        while running:
+            screen.blit(background, (0, 0))
+
+            # Draw buttons
+            pygame.draw.rect(screen, (200, 200, 200), white_button)
+            pygame.draw.rect(screen, (200, 200, 200), black_button)
+            pygame.draw.rect(screen, (200, 200, 200), random_button)
+
+            # Render button text
+            white_text = font.render("Play as White", True, (0, 0, 0))
+            black_text = font.render("Play as Black", True, (0, 0, 0))
+            random_text = font.render("Random", True, (0, 0, 0))
+
+            screen.blit(white_text, (white_button.x + 10, white_button.y + 30))
+            screen.blit(black_text, (black_button.x + 10, black_button.y + 30))
+            screen.blit(random_text, (random_button.x + 50, random_button.y + 30))
+
+            pygame.display.flip()
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    pos = pygame.mouse.get_pos()
+                    if white_button.collidepoint(pos):
+                        player_color = "w"
+                        running = False
+                    elif black_button.collidepoint(pos):
+                        player_color = "b"
+                        running = False
+                    elif random_button.collidepoint(pos):
+                        player_color = random.choice(["w", "b"])
+                        running = False
+
+        # Computer gets the opposite color.
+        computer_color = "w" if player_color == "b" else "b"
+        return player_color, computer_color
 
     def display_help(self):
         """
@@ -542,85 +602,6 @@ class Game:
         self.dragging_piece = False
         self.selected_piece = None
 
-    def perform_move(self, row: int, col: int) -> None:
-        """
-        Executes a move for the selected piece and updates the game state.
-
-        This includes storing the move in history (with details for undo/redo), moving the piece,
-        handling special moves (castling, en passant, promotion), and switching turns.
-
-        Args:
-            row (int): The destination row.
-            col (int): The destination column.
-        """
-        self.future_moves.clear()
-
-        start_pos = (self.selected_piece.row, self.selected_piece.col)
-        self.was_there_enemy = self.board.board[row][col] is not None
-        prev_piece, prev_start, prev_end = self.get_last_move()
-
-        captured_piece = self.get_captured_piece(
-            self.selected_piece, row, col, prev_piece, prev_start, prev_end
-        )
-
-        castling_move = isinstance(self.selected_piece, King) and self.board.is_castle(
-            self.selected_piece,
-            (self.selected_piece.row, self.selected_piece.col),
-            (row, col),
-        )
-
-        promotion_move = isinstance(self.selected_piece, Pawn) and (
-            (self.selected_piece.color == "w" and row == 0)
-            or (self.selected_piece.color == "b" and row == 7)
-        )
-
-        king_moved = self.board.king_moved.copy()
-        rook_moved = self.board.rook_moved.copy()
-
-        self.move_history.append(
-            {
-                "piece": self.selected_piece,
-                "start": start_pos,
-                "end": (row, col),
-                "captured": captured_piece,
-                "en_passant": self.board.is_en_passant(
-                    self.selected_piece,
-                    (self.selected_piece.row, self.selected_piece.col),
-                    (row, col),
-                    (prev_piece, prev_start, prev_end),
-                ),
-                "castling": castling_move,
-                "king_moved": king_moved,
-                "rook_moved": rook_moved,
-                "promotion": promotion_move,
-            }
-        )
-
-        self.board.move_piece(
-            self.selected_piece,
-            start_pos,
-            (row, col),
-            (prev_piece, prev_start, prev_end),
-            self,
-        )
-
-        self.last_move_piece = self.selected_piece
-        self.last_move_start = start_pos
-        self.last_move_end = (row, col)
-
-        self.selected_piece.row = row
-        self.selected_piece.col = col
-        self.turn = "b" if self.turn == "w" else "w"
-
-        self.board.draw(self.screen)
-        self.board.highlight_last_move(
-            self.screen,
-            (self.last_move_start, self.last_move_end),
-            self.was_there_enemy,
-        )
-
-        self.check_game_status()
-
     def get_last_move(self) -> Tuple[Optional[Any], Tuple[int, int], Tuple[int, int]]:
         """
         Retrieves details of the most recent move from the move history.
@@ -722,6 +703,85 @@ class Game:
         elif event.key == pygame.K_y:
             self.advance_move()
 
+    def perform_move(self, row: int, col: int) -> None:
+        """
+        Executes a move for the selected piece and updates the game state.
+
+        This includes storing the move in history (with details for undo/redo), moving the piece,
+        handling special moves (castling, en passant, promotion), and switching turns.
+
+        Args:
+            row (int): The destination row.
+            col (int): The destination column.
+        """
+        self.future_moves.clear()
+
+        start_pos = (self.selected_piece.row, self.selected_piece.col)
+        self.was_there_enemy = self.board.board[row][col] is not None
+        prev_piece, prev_start, prev_end = self.get_last_move()
+
+        captured_piece = self.get_captured_piece(
+            self.selected_piece, row, col, prev_piece, prev_start, prev_end
+        )
+
+        castling_move = isinstance(self.selected_piece, King) and self.board.is_castle(
+            self.selected_piece,
+            (self.selected_piece.row, self.selected_piece.col),
+            (row, col),
+        )
+
+        promotion_move = isinstance(self.selected_piece, Pawn) and (
+            (self.selected_piece.color == "w" and row == 0)
+            or (self.selected_piece.color == "b" and row == 7)
+        )
+
+        king_moved = self.board.king_moved.copy()
+        rook_moved = self.board.rook_moved.copy()
+
+        self.move_history.append(
+            {
+                "piece": self.selected_piece,
+                "start": start_pos,
+                "end": (row, col),
+                "captured": captured_piece,
+                "en_passant": self.board.is_en_passant(
+                    self.selected_piece,
+                    (self.selected_piece.row, self.selected_piece.col),
+                    (row, col),
+                    (prev_piece, prev_start, prev_end),
+                ),
+                "castling": castling_move,
+                "king_moved": king_moved,
+                "rook_moved": rook_moved,
+                "promotion": promotion_move,
+            }
+        )
+
+        self.board.move_piece(
+            self.selected_piece,
+            start_pos,
+            (row, col),
+            (prev_piece, prev_start, prev_end),
+            self,
+        )
+
+        self.last_move_piece = self.selected_piece
+        self.last_move_start = start_pos
+        self.last_move_end = (row, col)
+
+        self.selected_piece.row = row
+        self.selected_piece.col = col
+        self.turn = "b" if self.turn == "w" else "w"
+
+        self.board.draw(self.screen)
+        self.board.highlight_last_move(
+            self.screen,
+            (self.last_move_start, self.last_move_end),
+            self.was_there_enemy,
+        )
+
+        self.check_game_status()
+
     def computer_move(self) -> None:
         """
         Executes the computer's move using the Minimax algorithm.
@@ -791,21 +851,34 @@ class Game:
                 )
 
                 self.ai_moved = True
-                self.turn = "w"  # Switch turn to the player
+                self.turn = (
+                    "b" if self.turn == "w" else "w"
+                )  # Switch turn to the player
 
     def run(self, mode: str) -> None:
         """
         The main game loop.
 
-        Manages the overall game flow, including user input handling, board rendering, AI moves,
-        and checking for game-ending conditions.
+        This method sets up and runs the overall game flow. It handles:
+        - Displaying the help screen (if mode is "help")
+        - Allowing the player to choose their color (if playing against the computer)
+        - Initializing the game state
+        - Continuously rendering the board and pieces
+        - Processing user input and AI moves
+        - Checking for game-ending conditions (checkmate, stalemate)
 
         Args:
-            mode (str): The game mode ("help", "pvp", or "pvc"), which determines the initial game state.
+            mode (str): The game mode, which can be "help", "pvp", or "pvc".
+                        In "pvc" mode, an in-game menu is used to let the player choose their color.
         """
 
         if mode == "help":
             self.display_help()
+
+        if mode == "pvc":
+            player_color, computer_color = self.choose_color_menu(self.screen)
+            self.player_color = player_color
+            self.computer_player = ComputerPlayer(computer_color)
 
         self.initialize_game_state()
 
