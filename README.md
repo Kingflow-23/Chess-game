@@ -1,14 +1,18 @@
 # Chess Game - Python & Pygame
 
-This is a simple chess game implemented using Python and Pygame. It includes various features such as drag-and-drop piece movement, check/checkmate detection, en passant, castling, and an undo/redo functionality.
+This is a simple chess game implemented using Python and Pygame. It features drag-and-drop piece movement, check/checkmate detection, en passant, castling, and an undo/redo functionality. Play against a friend (PvP) or challenge the computer (PvC), which uses a Minimax algorithm with Alpha-Beta pruning for its moves.
 
 ## Features:
-- **PvP Mode**: Play against a friend on the same computer.
-- **Drag-and-Drop**: Move pieces by dragging them.
-- **Undo/Redo**: Undo moves with the `B` key, redo with the `Y` key.
-- **En Passant**: Support for the special pawn capture.
-- **Valid Move Highlighting**: Highlight possible moves when a piece is selected if enabled by pressing the `S` key.
-- **Check/Checkmate Detection**: Automatically detects checkmate and stalemate.
+
+- **PvP Mode:** Play against a friend on the same computer.
+- **PvC Mode:** Play against an AI that uses the Minimax algorithm with Alpha-Beta pruning and transposition table caching.
+- **Drag-and-Drop Movement:** Select and move pieces by dragging them.
+- **Undo/Redo:** Undo your moves with the `B` key and redo undone moves with the `Y` key.
+- **En Passant:** Special pawn capture is supported.
+- **Castling:** Both kingside and queenside castling are implemented (with proper conditions).
+- **Valid Move Highlighting:** When enabled (by pressing the `S` key), possible moves for a selected piece are highlighted.
+- **Check/Checkmate/Stalemate Detection:** The game automatically detects check, checkmate, and stalemate.
+- **Pawn Promotion:** When a pawn reaches the opposite end, a prompt allows promotion to a Queen, Rook, Bishop, or Knight (with auto-promotion for AI moves).
 
 ## Requirements:
 
@@ -17,7 +21,7 @@ This is a simple chess game implemented using Python and Pygame. It includes var
 I recommend you to use a virtual environment.
 
 ```bash 
-python -m venv venv
+python -m venv .
 source venv/bin/activate # On Linux/Mac
 venv\Scripts\activate # On Windows
 ``` 
@@ -58,15 +62,15 @@ pip install -r requirements.txt
 
     - First, You'll have to choose the opponent. You can choose between a friend or the computer.
     - If you choose a friend, you can play against each other on the same computer.
-    - If you choose the computer, you'll play against the computer. The computer is using a minimax algorithm to search for the best move.
+    - If you choose the computer, you'll play against the computer. You will be able to choose before the color you'll play as. The computer is using a minimax algorithm to search for the best move.
    - When you run the game, the chessboard will appear on the screen with all the pieces in their initial positions.
 
 2. **Move Pieces**:
    - To move a piece, **click** on it, and **drag** it to a valid square on the board.
-   - The possible moves for each piece will be highlighted in **green**.
+   - The possible moves for each piece will be highlighted in **green**, **red** for capture moves.
 
 3. **Undo a Move**:
-   - Press the **B** key to undo your last move.
+   - Press the **B** key to undo your last move. It's a simple way to try different moves without losing your progress but be careful when using it vs computer cause it might cause bugs. My advice i can give to you is to wait for your turn and then to click 2 times on "B".
    - This will revert the board to the previous state, allowing you to correct mistakes or reconsider your strategy.
 
 4. **Redo a Move**:
