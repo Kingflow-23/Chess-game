@@ -40,17 +40,24 @@ class Game:
         author_text = font.render("Created by KingFlow-23", True, (200, 200, 200))
         pvp_text = font.render("1. Player vs Player", True, (255, 255, 255))
         pvc_text = font.render("2. Player vs Computer", True, (255, 255, 255))
-        help_text = font.render("3. Help", True, (255, 255, 255))
+        cvc_text = font.render("3. Computer vs Computer", True, (255, 255, 255))
+        help_text = font.render("4. Help", True, (255, 255, 255))
 
         # Define button areas (rectangles)
         pvp_rect = pygame.Rect(
-            WIDTH // 2 - 150, HEIGHT // 2.7, pvp_text.get_width(), pvp_text.get_height()
+            WIDTH // 2 - 180, HEIGHT // 2.7, pvp_text.get_width(), pvp_text.get_height()
         )
         pvc_rect = pygame.Rect(
-            WIDTH // 2 - 150, HEIGHT // 2.3, pvc_text.get_width(), pvc_text.get_height()
+            WIDTH // 2 - 180, HEIGHT // 2.3, pvc_text.get_width(), pvc_text.get_height()
+        )
+        cvc_rect = pygame.Rect(
+            WIDTH // 2 - 180, HEIGHT // 2, cvc_text.get_width(), cvc_text.get_height()
         )
         help_rect = pygame.Rect(
-            WIDTH // 2 - 150, HEIGHT // 2, help_text.get_width(), help_text.get_height()
+            WIDTH // 2 - 180,
+            HEIGHT // 1.78,
+            help_text.get_width(),
+            help_text.get_height(),
         )
 
         running = True
@@ -58,9 +65,10 @@ class Game:
             self.screen.blit(background, (0, 0))
             self.screen.blit(title_text, (WIDTH // 2 - 150, HEIGHT // 6 - 50))
             self.screen.blit(author_text, (WIDTH // 2 - 190, HEIGHT // 4 - 50))
-            self.screen.blit(pvp_text, (WIDTH // 2 - 150, HEIGHT // 2.7))
-            self.screen.blit(pvc_text, (WIDTH // 2 - 150, HEIGHT // 2.3))
-            self.screen.blit(help_text, (WIDTH // 2 - 150, HEIGHT // 2))
+            self.screen.blit(pvp_text, (WIDTH // 2 - 180, HEIGHT // 2.7))
+            self.screen.blit(pvc_text, (WIDTH // 2 - 180, HEIGHT // 2.3))
+            self.screen.blit(cvc_text, (WIDTH // 2 - 180, HEIGHT // 2))
+            self.screen.blit(help_text, (WIDTH // 2 - 180, HEIGHT // 1.78))
             pygame.display.flip()
 
             for event in pygame.event.get():
@@ -75,6 +83,9 @@ class Game:
                         self.game_mode = "pvc"
                         running = False
                     if event.key == pygame.K_3:
+                        self.game_mode = "cvc"
+                        running = False
+                    if event.key == pygame.K_4:
                         self.game_mode = "help"
                         running = False
 
@@ -87,6 +98,9 @@ class Game:
                             running = False
                         elif pvc_rect.collidepoint(mouse_pos):
                             self.game_mode = "pvc"
+                            running = False
+                        elif cvc_rect.collidepoint(mouse_pos):
+                            self.game_mode = "cvc"
                             running = False
                         elif help_rect.collidepoint(mouse_pos):
                             self.game_mode = "help"
@@ -113,10 +127,19 @@ class Game:
                             "2. Player vs Computer", True, (255, 255, 255)
                         )
 
-                    if help_rect.collidepoint(mouse_pos):
-                        help_text = font.render("3. Help", True, (255, 255, 0))
+                    if cvc_rect.collidepoint(mouse_pos):
+                        cvc_text = font.render(
+                            "3. Computer vs Computer", True, (255, 255, 0)
+                        )
                     else:
-                        help_text = font.render("3. Help", True, (255, 255, 255))
+                        cvc_text = font.render(
+                            "3. Computer vs Computer", True, (255, 255, 255)
+                        )
+
+                    if help_rect.collidepoint(mouse_pos):
+                        help_text = font.render("4. Help", True, (255, 255, 0))
+                    else:
+                        help_text = font.render("4. Help", True, (255, 255, 255))
 
     def choose_color_menu(self, screen) -> Tuple[str, str]:
         """
@@ -791,11 +814,10 @@ class Game:
         """
         prev_piece, prev_start, prev_end = self.get_last_move()
 
-        if (
-            self.computer_player
-            and self.turn == self.computer_player.color
-            and not self.ai_moved
-        ):
+        if self.computer_player and self.turn == self.computer_player.color:
+            if self.game_mode == "pvc" and self.ai_moved:
+                return  # Prevent AI from moving multiple times in a row in PvC mode
+
             move = self.computer_player.get_best_move(self.board)
             if move:
                 start_pos, end_pos = move
@@ -847,53 +869,65 @@ class Game:
                 )
 
                 self.board.move_piece(
-                    piece, start_pos, end_pos, (prev_piece, prev_start, prev_end), self
+                    piece, start_pos, end_pos, (prev_piece, prev_start, prev_end)
                 )
 
-                self.ai_moved = True
-                self.turn = (
-                    "b" if self.turn == "w" else "w"
-                )  # Switch turn to the player
+                # Switch the turn after the move
+                self.turn = "b" if self.turn == "w" else "w"
+
+                # In CVC Mode: Allow AI to continue playing without restriction
+                if self.game_mode == "cvc":
+                    self.computer_player = (
+                        self.computer_white if self.turn == "w" else self.computer_black
+                    )
+                else:
+                    # In PvC Mode: Prevent AI from moving twice in a row
+                    self.ai_moved = True
 
     def run(self, mode: str) -> None:
         """
-        The main game loop.
+        Runs the main game loop.
 
-        This method sets up and runs the overall game flow. It handles:
-        - Displaying the help screen (if mode is "help")
-        - Allowing the player to choose their color (if playing against the computer)
-        - Initializing the game state
-        - Continuously rendering the board and pieces
-        - Processing user input and AI moves
-        - Checking for game-ending conditions (checkmate, stalemate)
+        This function manages:
+        - The game setup and initial mode selection.
+        - The continuous rendering of the board.
+        - Handling user inputs and AI moves.
+        - Running AI vs AI when in 'cvc' mode.
 
         Args:
-            mode (str): The game mode, which can be "help", "pvp", or "pvc".
-                        In "pvc" mode, an in-game menu is used to let the player choose their color.
+            mode (str): The game mode ('help', 'pvp', 'pvc', or 'cvc').
         """
-
-        if mode == "help":
-            self.display_help()
 
         if mode == "pvc":
             player_color, computer_color = self.choose_color_menu(self.screen)
             self.player_color = player_color
             self.computer_player = ComputerPlayer(computer_color)
 
+        elif mode == "cvc":
+            self.computer_white = ComputerPlayer("w")
+            self.computer_black = ComputerPlayer("b")
+            self.computer_player = self.computer_white  # Start with white
+
         self.initialize_game_state()
 
         while self.running:
+
+            if mode == "help":
+                self.display_help()
+
             self.draw_board_and_pieces()
 
-            if (
-                self.game_mode == "pvc"
-                and self.computer_player
-                and self.turn == self.computer_player.color
-            ):
-                if not self.ai_moved:
-                    self.computer_move()
-            else:
-                self.ai_moved = False
+            if self.game_mode == "pvc":
+                if self.computer_player and self.turn == self.computer_player.color:
+                    if not self.ai_moved:
+                        self.computer_move()
+                else:
+                    self.ai_moved = False
+
+            elif self.game_mode == "cvc":
+                # Both AI players take turns automatically
+                # pygame.time.delay(500)  # Small delay for visualization
+                self.computer_move()
 
             self.handle_events()
             pygame.display.flip()
