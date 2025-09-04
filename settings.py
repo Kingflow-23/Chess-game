@@ -34,5 +34,9 @@ PIECES = {
 
 TITLE_BG = pygame.image.load("background/title.jpg")
 
+scale_factor = 0.8
+
+piece_size = int(SQUARE_SIZE * scale_factor)
+
 for key in PIECES:
-    PIECES[key] = pygame.transform.scale(PIECES[key], (SQUARE_SIZE, SQUARE_SIZE))
+    PIECES[key] = pygame.transform.scale(PIECES[key], (piece_size, piece_size))

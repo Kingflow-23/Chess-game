@@ -503,7 +503,7 @@ class Game:
         """
         self.move_history: list = []
         self.future_moves: list = []
-        self.show_valid_moves: bool = False
+        self.show_valid_moves: bool = True
         self.dragging_piece: bool = False
         self.offset_x: int = 0
         self.offset_y: int = 0

@@ -100,10 +100,17 @@ class Piece:
             screen (pygame.Surface): The game screen to draw the piece on.
         """
         piece_key = self.color + self.piece_type  # e.g., "wp" for white pawn
-        if piece_key in PIECES:
-            screen.blit(
-                PIECES[piece_key], (self.col * SQUARE_SIZE, self.row * SQUARE_SIZE)
-            )
+
+        piece_image = PIECES[piece_key]
+
+        # Center the piece in the square
+        offset_x = (SQUARE_SIZE - piece_image.get_width()) // 2
+        offset_y = (SQUARE_SIZE - piece_image.get_height()) // 2
+
+        screen.blit(
+            piece_image,
+            (self.col * SQUARE_SIZE + offset_x, self.row * SQUARE_SIZE + offset_y),
+        )
 
     def clone(self):
         """
