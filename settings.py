@@ -3,8 +3,16 @@ import pygame
 # Initialize Pygame
 pygame.init()
 
+# --- Get Real Screen Info ---
+info = pygame.display.Info()
+SCREEN_WIDTH, SCREEN_HEIGHT = info.current_w, info.current_h  # Fullscreen resolution
+
 # Constants
-WIDTH, HEIGHT = 900, 900
+
+# Board adapts to screen (90% of height, capped by width)
+BOARD_SIZE = int(min(SCREEN_WIDTH, SCREEN_HEIGHT) * 0.8)
+
+WIDTH, HEIGHT = BOARD_SIZE, BOARD_SIZE
 ROWS, COLS = 8, 8
 SQUARE_SIZE = WIDTH // COLS
 
@@ -40,3 +48,7 @@ piece_size = int(SQUARE_SIZE * scale_factor)
 
 for key in PIECES:
     PIECES[key] = pygame.transform.scale(PIECES[key], (piece_size, piece_size))
+    
+# --- Offsets for centering the board in fullscreen ---
+BOARD_OFFSET_X = (SCREEN_WIDTH - WIDTH) // 2
+BOARD_OFFSET_Y = (SCREEN_HEIGHT - HEIGHT) // 2
