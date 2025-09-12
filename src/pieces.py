@@ -92,12 +92,14 @@ class Piece:
 
         return safe_moves
 
-    def draw(self, screen: pygame.Surface) -> None:
+    def draw(self, board, screen: pygame.Surface, flipped: bool = False) -> None:
         """
         Draws the piece on the board at its current position.
 
         Args:
+            board (Board): The board instance, used for coordinate conversion.
             screen (pygame.Surface): The game screen to draw the piece on.
+            flipped (bool): Whether to flip the board (black's perspective).
         """
         piece_key = self.color + self.piece_type  # e.g., "wp" for white pawn
 
@@ -107,10 +109,9 @@ class Piece:
         offset_x = (SQUARE_SIZE - piece_image.get_width()) // 2
         offset_y = (SQUARE_SIZE - piece_image.get_height()) // 2
 
-        screen.blit(
-            piece_image,
-            (self.col * SQUARE_SIZE + offset_x, self.row * SQUARE_SIZE + offset_y),
-        )
+        x, y = board.to_screen_coords(self.row, self.col, flipped)
+
+        screen.blit(piece_image, (x + offset_x, y + offset_y))
 
     def clone(self):
         """

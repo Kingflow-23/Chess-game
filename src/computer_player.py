@@ -1,6 +1,6 @@
-from typing import Tuple, Optional, List, Dict, Any
+from typing import Tuple, Optional, List
 
-from src.board import Board  # Adjust imports as necessary
+from src.board import Board
 
 
 class ComputerPlayer:

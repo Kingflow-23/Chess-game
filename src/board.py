@@ -88,7 +88,7 @@ class Board:
 
         return board
 
-    def draw(self, screen: pygame.Surface) -> None:
+    def draw(self, screen: pygame.Surface, flipped: bool = False) -> None:
         """
         Draws the chessboard along with all the pieces onto the provided screen.
         Also highlights the king in red if it is in check.
@@ -103,6 +103,9 @@ class Board:
         # Draw the board
         for row in range(ROWS):
             for col in range(COLS):
+
+                x, y = self.to_screen_coords(row, col, flipped)
+
                 # Default square color
                 color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
 
@@ -112,24 +115,41 @@ class Board:
                 ):
                     color = (255, 0, 0)  # Red color for check
 
-                pygame.draw.rect(
-                    screen,
-                    color,
-                    (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE),
-                )
+                pygame.draw.rect(screen, color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
 
         # Draw the pieces on top of the squares
         for row in range(ROWS):
             for col in range(COLS):
                 piece = self.board[row][col]
                 if piece:
-                    piece.draw(screen)
+                    piece.draw(self, screen, flipped)
+
+    def to_screen_coords(
+        self, row: int, col: int, flipped: bool = False
+    ) -> Tuple[int, int]:
+        """
+        Convert board coordinates (row, col) -> top-left screen pixel (x, y).
+        If flipped is True it returns coords for black's perspective (board rotated 180°).
+        """
+        if not flipped:
+            return col * SQUARE_SIZE, row * SQUARE_SIZE
+        # flipped: mirror both axes
+        return (COLS - 1 - col) * SQUARE_SIZE, (ROWS - 1 - row) * SQUARE_SIZE
+
+    def from_screen_coords(self, x: int, y: int, flipped: bool) -> Tuple[int, int]:
+        """Convert screen pixel coordinates back to board (row, col)."""
+        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
+        if flipped:
+            row = ROWS - 1 - row
+            col = COLS - 1 - col
+        return row, col
 
     def highlight_valid_moves(
         self,
         screen: pygame.Surface,
         selected_piece: Piece,
         last_move: Tuple[Any, Tuple[int, int], Tuple[int, int]],
+        flipped: bool = False,
     ) -> None:
         """
         Highlights valid moves for the selected piece.
@@ -169,14 +189,12 @@ class Board:
                 if self.is_castle(selected_piece, current_pos, move):
                     color = (0, 0, 255)  # Blue for castling move
 
-            # Draw the highlight circle
+            # Convert to screen coords
+            x, y = self.to_screen_coords(move[0], move[1], flipped)
             pygame.draw.circle(
                 screen,
                 color,
-                (
-                    move[1] * SQUARE_SIZE + SQUARE_SIZE // 2,
-                    move[0] * SQUARE_SIZE + SQUARE_SIZE // 2,
-                ),
+                (x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2),
                 10,
             )
 
@@ -185,6 +203,7 @@ class Board:
         screen: pygame.Surface,
         last_move: Tuple[Tuple[int, int], Tuple[int, int]],
         was_there_enemy: bool,
+        flipped: bool = False,
     ) -> None:
         """
         Highlights the last move made on the board.
@@ -208,28 +227,20 @@ class Board:
         yellow = (255, 255, 0)  # Normal move highlight
         red = (255, 0, 0)  # Capture highlight
 
+        # Convert to screen coords
+        start_x, start_y = self.to_screen_coords(start_row, start_col, flipped)
+        end_x, end_y = self.to_screen_coords(end_row, end_col, flipped)
+
         # Highlight the start square (Yellow Border)
         pygame.draw.rect(
-            screen,
-            yellow,
-            pygame.Rect(
-                start_col * SQUARE_SIZE,
-                start_row * SQUARE_SIZE,
-                SQUARE_SIZE,
-                SQUARE_SIZE,
-            ),
-            5,
+            screen, yellow, pygame.Rect(start_x, start_y, SQUARE_SIZE, SQUARE_SIZE), 5
         )
+
         # Highlight the destination square
         pygame.draw.rect(
             screen,
-            red if was_there_enemy else yellow,  # Red if capture, otherwise Yellow
-            pygame.Rect(
-                end_col * SQUARE_SIZE,
-                end_row * SQUARE_SIZE,
-                SQUARE_SIZE,
-                SQUARE_SIZE,
-            ),
+            red if was_there_enemy else yellow,
+            pygame.Rect(end_x, end_y, SQUARE_SIZE, SQUARE_SIZE),
             5,
         )
 

@@ -21,6 +21,7 @@ class Game:
         self.board = Board()
         self.selected_piece = None
         self.turn = "w"  # White starts
+        self.flipped = False
         self.running = True
         self.computer_player = None
         self.setup_phase()  # Call setup_phase to select game mode
@@ -28,7 +29,7 @@ class Game:
     def setup_phase(self):
         """
         Displays the initial menu to choose the game mode.
-        Options include Player vs Player, Player vs Computer, and Help.
+        Options include Player vs Player, Player vs Computer, Computer Vs Computer and Help.
         The game proceeds based on the user's selection.
         """
         background = pygame.image.load("background/title.jpg")
@@ -75,6 +76,12 @@ class Game:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                        pygame.quit()
+                        exit()
+
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_1:
                         self.game_mode = "pvp"
@@ -185,6 +192,12 @@ class Game:
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     exit()
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                        pygame.quit()
+                        exit()
+
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     if white_button.collidepoint(pos):
@@ -521,7 +534,7 @@ class Game:
         If a piece is being dragged, it draws the piece at the current mouse position.
         Finally, it highlights the last move made.
         """
-        self.board.draw(self.screen)
+        self.board.draw(self.screen, self.flipped)
 
         if self.selected_piece:
             if self.show_valid_moves:
@@ -529,11 +542,30 @@ class Game:
                     self.screen,
                     self.selected_piece,
                     (self.last_move_piece, self.last_move_start, self.last_move_end),
+                    flipped=self.flipped,
                 )
 
             if self.dragging_piece:
                 temp_row, temp_col = self.selected_piece.row, self.selected_piece.col
-                self.board.board[temp_row][temp_col] = None  # Hide piece while dragging
+
+                # Convert to flipped screen coords
+                screen_x, screen_y = self.board.to_screen_coords(
+                    temp_row, temp_col, self.flipped
+                )
+
+                # ✅ Use flipped row/col for correct square color
+                draw_row = ROWS - 1 - temp_row if self.flipped else temp_row
+                draw_col = COLS - 1 - temp_col if self.flipped else temp_col
+
+                square_color = (
+                    LIGHT_BROWN if (draw_row + draw_col) % 2 == 0 else DARK_BROWN
+                )
+                pygame.draw.rect(
+                    self.screen,
+                    square_color,
+                    (screen_x, screen_y, SQUARE_SIZE, SQUARE_SIZE),
+                )
+
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 self.screen.blit(
                     self.selected_piece.image,
@@ -544,6 +576,7 @@ class Game:
             self.screen,
             (self.last_move_start, self.last_move_end),
             self.was_there_enemy,
+            flipped=self.flipped,
         )
 
     def handle_events(self) -> None:
@@ -579,14 +612,18 @@ class Game:
             event (pygame.event.Event): The mouse button down event.
         """
         x, y = event.pos
-        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
+        row, col = self.board.from_screen_coords(x, y, self.flipped)
+
         piece = self.board.board[row][col]
 
         if piece and piece.color == self.turn:
             self.selected_piece = piece
             self.dragging_piece = True
-            self.offset_x = x - col * SQUARE_SIZE
-            self.offset_y = y - row * SQUARE_SIZE
+
+            # ✅ Use to_screen_coords so offsets are correct when flipped
+            square_x, square_y = self.board.to_screen_coords(row, col, self.flipped)
+            self.offset_x = x - square_x
+            self.offset_y = y - square_y
 
     def handle_mouse_motion(self) -> None:
         """Handles mouse movement while dragging a piece."""
@@ -611,7 +648,7 @@ class Game:
             return
 
         x, y = event.pos
-        col, row = x // SQUARE_SIZE, y // SQUARE_SIZE
+        row, col = self.board.from_screen_coords(x, y, self.flipped)
 
         if self.selected_piece and (row, col) in self.selected_piece.valid_moves(
             self.board, (self.last_move_piece, self.last_move_start, self.last_move_end)
@@ -686,11 +723,11 @@ class Game:
         and the endgame message is displayed.
         """
         if self.board.is_checkmate(self.turn):
-            self.board.draw(self.screen)
+            self.board.draw(self.screen, self.flipped)
             self.running = False
             self.endgame("Checkmate", self.turn)
         elif self.board.is_stalemate(self.turn):
-            self.board.draw(self.screen)
+            self.board.draw(self.screen, self.flipped)
             self.running = False
             self.endgame("Draw", self.turn)
 
@@ -709,7 +746,7 @@ class Game:
         Args:
             event (pygame.event.Event): The keypress event.
         """
-        if event.key == pygame.K_BACKSPACE:
+        if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
             pygame.quit()
             sys.exit()
         elif event.key == pygame.K_RETURN:
@@ -796,11 +833,12 @@ class Game:
         self.selected_piece.col = col
         self.turn = "b" if self.turn == "w" else "w"
 
-        self.board.draw(self.screen)
+        self.board.draw(self.screen, self.flipped)
         self.board.highlight_last_move(
             self.screen,
             (self.last_move_start, self.last_move_end),
             self.was_there_enemy,
+            flipped=self.flipped,
         )
 
         self.check_game_status()
@@ -902,6 +940,9 @@ class Game:
             player_color, computer_color = self.choose_color_menu(self.screen)
             self.player_color = player_color
             self.computer_player = ComputerPlayer(computer_color)
+
+            # Flip board if player is black
+            self.flipped = True if player_color == "b" else False
 
         elif mode == "cvc":
             self.computer_white = ComputerPlayer("w")
