@@ -78,9 +78,15 @@ class Game:
                     sys.exit()
 
                 elif event.type == pygame.KEYDOWN:
-                    if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                    if event.key == pygame.K_ESCAPE:
                         pygame.quit()
                         exit()
+
+                    elif event.key == pygame.K_BACKSPACE:
+                        # Go back to the main menu
+                        self.setup_phase()
+                        # Restart the run loop with the newly chosen game mode
+                        self.run(self.game_mode)
 
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_1:
@@ -172,15 +178,34 @@ class Game:
         while running:
             screen.blit(background, (0, 0))
 
+            mouse_pos = pygame.mouse.get_pos()
+
+            # --- White button ---
+            if white_button.collidepoint(mouse_pos):
+                white_text = font.render(
+                    "Play as White", True, (255, 255, 0)
+                )  # Yellow hover
+            else:
+                white_text = font.render(
+                    "Play as White", True, (0, 0, 0)
+                )  # Black default
+
+            # --- Black button ---
+            if black_button.collidepoint(mouse_pos):
+                black_text = font.render("Play as Black", True, (255, 255, 0))
+            else:
+                black_text = font.render("Play as Black", True, (0, 0, 0))
+
+            # --- Random button ---
+            if random_button.collidepoint(mouse_pos):
+                random_text = font.render("Random", True, (255, 255, 0))
+            else:
+                random_text = font.render("Random", True, (0, 0, 0))
+
             # Draw buttons
             pygame.draw.rect(screen, (200, 200, 200), white_button)
             pygame.draw.rect(screen, (200, 200, 200), black_button)
             pygame.draw.rect(screen, (200, 200, 200), random_button)
-
-            # Render button text
-            white_text = font.render("Play as White", True, (0, 0, 0))
-            black_text = font.render("Play as Black", True, (0, 0, 0))
-            random_text = font.render("Random", True, (0, 0, 0))
 
             screen.blit(white_text, (white_button.x + 10, white_button.y + 30))
             screen.blit(black_text, (black_button.x + 10, black_button.y + 30))
@@ -194,9 +219,15 @@ class Game:
                     exit()
 
                 elif event.type == pygame.KEYDOWN:
-                    if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                    if event.key == pygame.K_ESCAPE:
                         pygame.quit()
                         exit()
+
+                    elif event.key == pygame.K_BACKSPACE:
+                        # Go back to the main menu
+                        self.setup_phase()
+                        # Restart the run loop with the newly chosen game mode
+                        self.run(self.game_mode)
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
@@ -265,9 +296,16 @@ class Game:
                     sys.exit()
                 if event.type == pygame.KEYDOWN:
                     waiting = False  # Exit help screen when a key is pressed
-                    if event.key == pygame.K_BACKSPACE:
+                    if event.key == pygame.K_ESCAPE:
                         pygame.quit()
-                        sys.exit()  # Exit the game if Backspace is pressed
+                        sys.exit()  # Exit the game if Escape is pressed
+
+                    elif event.key == pygame.K_BACKSPACE:
+                        # Go back to the main menu
+                        self.setup_phase()
+                        # Restart the run loop with the newly chosen game mode
+                        self.run(self.game_mode)
+
                     elif event.key == pygame.K_RETURN:
                         self.setup_phase()  # Return to the main menu if Enter is pressed
 
@@ -736,7 +774,8 @@ class Game:
         Processes keypress events and executes corresponding game actions.
 
         Supported keys:
-          - Backspace: Exit the game.
+          - Escape: Exit the game.
+          - Backspace: Go back to the game menu.
           - Return: Restart the game.
           - Z: Surrender.
           - S: Toggle showing valid moves.
@@ -746,9 +785,17 @@ class Game:
         Args:
             event (pygame.event.Event): The keypress event.
         """
-        if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+        if event.key == pygame.K_ESCAPE:
+            # Quit the whole game
             pygame.quit()
             sys.exit()
+
+        elif event.key == pygame.K_BACKSPACE:
+            # Go back to the main menu
+            self.setup_phase()
+            # Restart the run loop with the newly chosen game mode
+            self.run(self.game_mode)
+
         elif event.key == pygame.K_RETURN:
             self.__init__()
             self.run(self.game_mode)
