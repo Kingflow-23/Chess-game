@@ -41,7 +41,13 @@ class ComputerPlayer:
         return hash(board_str)
 
     def minimax(
-        self, board: Board, depth: int, alpha: float, beta: float, maximizing: bool
+        self,
+        board: Board,
+        depth: int,
+        alpha: float,
+        beta: float,
+        maximizing: bool,
+        current_color: str,
     ) -> Tuple[int, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
         """
         Performs the Minimax algorithm with Alpha-Beta pruning and transposition table caching.
@@ -52,6 +58,7 @@ class ComputerPlayer:
             alpha (float): The current alpha value for pruning.
             beta (float): The current beta value for pruning.
             maximizing (bool): True if it's the maximizing player's turn, False for minimizing.
+            current_color: str, The color of the current player ("w" or "b").
 
         Returns:
             Tuple[int, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
@@ -63,12 +70,21 @@ class ComputerPlayer:
         if board_key in self.transposition_table:
             return self.transposition_table[board_key]
 
-        if (
-            depth == 0
-            or board.is_checkmate(self.color)
-            or board.is_checkmate(self.opponent_color)
-        ):
+        # Depth reached → evaluate
+        if depth == 0:
             score = self.evaluate_board(board)
+            self.transposition_table[board_key] = (score, None)
+            return score, None
+
+        # Generate moves for current player
+        moves = self.get_all_moves(board, current_color)
+
+        # No moves → checkmate or stalemate
+        if not moves:
+            if board.is_check(current_color):  # checkmate
+                score = -100000 if current_color == self.color else 100000
+            else:  # stalemate
+                score = 0
             self.transposition_table[board_key] = (score, None)
             return score, None
 
@@ -76,50 +92,43 @@ class ComputerPlayer:
 
         if maximizing:
             max_eval = float("-inf")
-
-            for move in self.get_all_moves(board, self.color):
+            for move in moves:
                 start_pos, end_pos = move
                 new_board = board.clone()
-                piece = new_board.board[start_pos[0]][
-                    start_pos[1]
-                ]  # Fetch the piece from the cloned board
-
+                piece = new_board.board[start_pos[0]][start_pos[1]]
                 new_board.move_piece(piece, start_pos, end_pos)
-                eval_score, _ = self.minimax(new_board, depth - 1, alpha, beta, False)
+
+                next_color = "b" if current_color == "w" else "w"
+                eval_score, _ = self.minimax(
+                    new_board, depth - 1, alpha, beta, False, next_color
+                )
 
                 if eval_score > max_eval:
                     max_eval, best_move = eval_score, move
-
                 alpha = max(alpha, eval_score)
-
                 if beta <= alpha:
-                    break  # Prune
-
+                    break
             self.transposition_table[board_key] = (max_eval, best_move)
             return max_eval, best_move
 
         else:
             min_eval = float("inf")
-
-            for move in self.get_all_moves(board, self.opponent_color):
+            for move in moves:
                 start_pos, end_pos = move
                 new_board = board.clone()
-                piece = new_board.board[start_pos[0]][
-                    start_pos[1]
-                ]  # Fetch the piece from the cloned board
-
+                piece = new_board.board[start_pos[0]][start_pos[1]]
                 new_board.move_piece(piece, start_pos, end_pos)
 
-                eval_score, _ = self.minimax(new_board, depth - 1, alpha, beta, True)
+                next_color = "b" if current_color == "w" else "w"
+                eval_score, _ = self.minimax(
+                    new_board, depth - 1, alpha, beta, True, next_color
+                )
 
                 if eval_score < min_eval:
                     min_eval, best_move = eval_score, move
-
                 beta = min(beta, eval_score)
-
                 if beta <= alpha:
-                    break  # Prune
-
+                    break
             self.transposition_table[board_key] = (min_eval, best_move)
             return min_eval, best_move
 
@@ -192,5 +201,7 @@ class ComputerPlayer:
         best_move = None
         for depth in range(4, 6):
             self.transposition_table.clear()
-            _, best_move = self.minimax(board, depth, float("-inf"), float("inf"), True)
+            _, best_move = self.minimax(
+                board, depth, float("-inf"), float("inf"), True, self.color
+            )
         return best_move
