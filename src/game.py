@@ -24,6 +24,11 @@ class Game:
         self.flipped = False
         self.running = True
         self.computer_player = None
+
+        self.position_history = []
+        self.position_counts = {}
+        self.halfmove_clock = 0
+
         self.setup_phase()  # Call setup_phase to select game mode
 
     def setup_phase(self):
@@ -262,9 +267,9 @@ class Game:
             "Use your mouse to select and move pieces.",
             "Press 'S' to toggle showing valid moves.",
             "Press 'Z' to surrender.",
-            "Press 'B' to undo a move.",
-            "Press 'Y' to redo an undone move.",
-            "Press 'Backspace' to quit.",
+            "Press 'C' to undo a move.",
+            "Press 'V' to redo an undone move.",
+            "Press 'Backspace' to go to the menu.",
             "Press 'Enter' to restart the game.",
             "",
             "Press 'Enter' when you're done with the help screen",
@@ -649,6 +654,16 @@ class Game:
         Args:
             event (pygame.event.Event): The mouse button down event.
         """
+        # If it's AI's turn, ignore clicks
+        if (
+            self.game_mode == "pvc"
+            and self.computer_player
+            and self.turn == self.computer_player.color
+        ):
+            return
+        if self.game_mode == "cvc":  # In CVC no human input at all
+            return
+
         x, y = event.pos
         row, col = self.board.from_screen_coords(x, y, self.flipped)
 
@@ -753,6 +768,55 @@ class Game:
             return self.board.board[row - 1 if piece.color == "b" else row + 1][col]
         return None
 
+    def get_position_key(self) -> str:
+        """
+        Generate a key that uniquely identifies the current position for repetition checks.
+        Includes: piece placement, turn, castling rights, and en passant (if valid).
+        """
+        # Piece placement
+        board_str = ""
+        for row in self.board.board:
+            for piece in row:
+                if piece:
+                    board_str += piece.color + piece.piece_type
+                else:
+                    board_str += "--"
+
+        # Whose turn
+        turn_str = self.turn
+
+        # Castling rights
+        castling_str = "".join([k for k, v in self.board.rook_moved.items() if not v])
+        if not castling_str:
+            castling_str = "-"
+
+        # En passant
+        en_passant_str = "-"
+        if self.move_history:
+            last_move = self.move_history[-1]
+            if last_move["piece"].piece_type == "p":
+                start_row, start_col = last_move["start"]
+                end_row, end_col = last_move["end"]
+
+                # Double pawn move
+                if abs(start_row - end_row) == 2:
+                    # Check if an enemy pawn can actually capture
+                    ep_row = (start_row + end_row) // 2
+                    ep_col = start_col
+                    for dc in [-1, 1]:
+                        adj_col = ep_col + dc
+                        if 0 <= adj_col < 8:
+                            adj_piece = self.board.board[ep_row][adj_col]
+                            if (
+                                adj_piece
+                                and adj_piece.color != last_move["piece"].color
+                                and adj_piece.piece_type == "p"
+                            ):
+                                en_passant_str = f"{ep_row}{ep_col}"
+                                break
+
+        return f"{board_str}_{turn_str}_{castling_str}_{en_passant_str}"
+
     def check_game_status(self) -> None:
         """
         Checks for game-ending conditions (checkmate or stalemate).
@@ -764,10 +828,22 @@ class Game:
             self.board.draw(self.screen, self.flipped)
             self.running = False
             self.endgame("Checkmate", self.turn)
+
         elif self.board.is_stalemate(self.turn):
             self.board.draw(self.screen, self.flipped)
             self.running = False
             self.endgame("Draw", self.turn)
+
+        elif self.check_threefold_repetition():
+            self.board.draw(self.screen, self.flipped)
+            self.running = False
+            self.endgame("Draw by repetition", self.turn)
+
+        # (optional) add 50-move rule:
+        elif self.fifty_move_rule():
+            self.board.draw(self.screen, self.flipped)
+            self.running = False
+            self.endgame("Draw by 50-move rule", self.turn)
 
     def handle_key_press(self, event: pygame.event.Event) -> None:
         """
@@ -779,8 +855,8 @@ class Game:
           - Return: Restart the game.
           - Z: Surrender.
           - S: Toggle showing valid moves.
-          - B: Undo the last move.
-          - Y: Redo the previously undone move.
+          - C: Undo the last move.
+          - V: Redo the previously undone move.
 
         Args:
             event (pygame.event.Event): The keypress event.
@@ -805,9 +881,9 @@ class Game:
             self.endgame(message, self.turn)
         elif event.key == pygame.K_s:
             self.show_valid_moves = not self.show_valid_moves
-        elif event.key == pygame.K_b:
+        elif event.key == pygame.K_c:
             self.undo_move()
-        elif event.key == pygame.K_y:
+        elif event.key == pygame.K_v:
             self.advance_move()
 
     def perform_move(self, row: int, col: int) -> None:
@@ -879,6 +955,15 @@ class Game:
         self.selected_piece.row = row
         self.selected_piece.col = col
         self.turn = "b" if self.turn == "w" else "w"
+
+        pos_key = self.get_position_key()
+        self.position_history.append(pos_key)
+        self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
+
+        if isinstance(self.selected_piece, Pawn) or self.was_there_enemy:
+            self.halfmove_clock = 0
+        else:
+            self.halfmove_clock += 1
 
         self.board.draw(self.screen, self.flipped)
         self.board.highlight_last_move(
@@ -969,6 +1054,18 @@ class Game:
                     # In PvC Mode: Prevent AI from moving twice in a row
                     self.ai_moved = True
 
+                # Save new position for repetition check
+                pos_key = self.get_position_key()
+                self.position_history.append(pos_key)
+                self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
+
+                if isinstance(self.selected_piece, Pawn) or self.was_there_enemy:
+                    self.halfmove_clock = 0
+                else:
+                    self.halfmove_clock += 1
+
+                self.check_game_status()
+
     def run(self, mode: str) -> None:
         """
         Runs the main game loop.
@@ -983,7 +1080,9 @@ class Game:
             mode (str): The game mode ('help', 'pvp', 'pvc', or 'cvc').
         """
 
-        if mode == "pvc":
+        self.game_mode = mode
+
+        if self.game_mode == "pvc":
             player_color, computer_color = self.choose_color_menu(self.screen)
             self.player_color = player_color
             self.computer_player = ComputerPlayer(computer_color)
@@ -1000,7 +1099,7 @@ class Game:
 
         while self.running:
 
-            if mode == "help":
+            if self.game_mode == "help":
                 self.display_help()
 
             self.draw_board_and_pieces()
@@ -1014,11 +1113,25 @@ class Game:
 
             elif self.game_mode == "cvc":
                 # Both AI players take turns automatically
-                # pygame.time.delay(500)  # Small delay for visualization
+                pygame.time.delay(500)  # Small delay for visualization
                 self.computer_move()
 
             self.handle_events()
             pygame.display.flip()
+
+    def check_threefold_repetition(self) -> bool:
+        """
+        Checks if the current position (with castling and en passant rights)
+        has appeared at least 3 times.
+        """
+        current_key = self.get_position_key()
+        return self.position_counts.get(current_key, 0) >= 3
+
+    def fifty_move_rule(self) -> bool:
+        """
+        Returns True if 50-move rule applies (no pawn move or capture in last 50 moves).
+        """
+        return self.halfmove_clock >= 100  # 100 half-moves = 50 moves
 
     def endgame(self, message: str, color: str) -> None:
         """
@@ -1032,6 +1145,13 @@ class Game:
 
         if message == "Draw":
             game_state = font.render("It's a draw!", True, (0, 0, 0))
+
+        elif message == "Draw by repetition":
+            game_state = font.render("It's a draw by repetition!", True, (0, 0, 0))
+
+        elif message == "Draw by 50-move rule":
+            game_state = font.render("It's a draw by 50-move rule!", True, (0, 0, 0))
+
         else:
             game_state = font.render(
                 f"{message} : {'White wins' if color == 'b' else 'Black wins'}",
