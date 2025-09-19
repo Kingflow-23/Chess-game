@@ -277,35 +277,15 @@ class Board:
         """
 
         if isinstance(piece, Pawn) and last_move:
-            last_move_piece, last_move_start, last_move_end = last_move
+            last_piece, last_start, last_end = last_move
 
-            # Ensure the last move was a pawn moving two squares forward
-            if (
-                isinstance(last_move_piece, Pawn)
-                and abs(last_move_start[0] - last_move_end[0]) == 2
-            ):
-
-                # Check if the last moved pawn is adjacent
-                if abs(last_move_end[1] - start[1]) == 1:
-                    if last_move_end[0] == start[0]:
-                        # Check if en passant is valid for white
-                        if (
-                            piece.color == "w"
-                            and last_move_piece.color == "b"
-                            and start[0] == 3
-                            and end[0] == 2
-                            and end[1] == last_move_end[1]
-                        ):
-                            return True
-                        # Check if en passant is valid for black
-                        if (
-                            piece.color == "b"
-                            and last_move_piece.color == "w"
-                            and start[0] == 4
-                            and end[0] == 5
-                            and end[1] == last_move_end[1]
-                        ):
-                            return True
+            # Last move must be a pawn moving 2 squares
+            if isinstance(last_piece, Pawn) and abs(last_start[0] - last_end[0]) == 2:
+                # Must be in the same rank as the last pawn
+                if start[0] == last_end[0] and abs(start[1] - last_end[1]) == 1:
+                    direction = -1 if piece.color == "w" else 1
+                    if end[0] == start[0] + direction and end[1] == last_end[1]:
+                        return True
 
         return False
 

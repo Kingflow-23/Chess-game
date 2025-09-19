@@ -757,13 +757,14 @@ class Game:
         """
         if self.board.board[row][col]:
             return self.board.board[row][col]
+
         if self.board.is_en_passant(
             piece,
             (piece.row, piece.col),
             (row, col),
             (prev_piece, prev_start, prev_end),
         ):
-            return self.board.board[row - 1 if piece.color == "b" else row + 1][col]
+            return self.board.board[prev_end[0]][prev_end[1]]
         return None
 
     def get_position_key(self) -> str:
@@ -1057,10 +1058,19 @@ class Game:
                 self.position_history.append(pos_key)
                 self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
 
-                if isinstance(self.selected_piece, Pawn) or self.was_there_enemy:
+                if isinstance(piece, Pawn) or self.was_there_enemy:
                     self.halfmove_clock = 0
                 else:
                     self.halfmove_clock += 1
+
+                self.board.draw(self.screen, self.flipped)
+
+                self.board.highlight_last_move(
+                    self.screen,
+                    (self.last_move_start, self.last_move_end),
+                    self.was_there_enemy,
+                    flipped=self.flipped,
+                )
 
                 self.check_game_status()
 
