@@ -335,6 +335,17 @@ class Game:
             was_promotion = last_move.get("promotion", False)
             king_moved = last_move.get("king_moved", None)
             rook_moved = last_move.get("rook_moved", None)
+            saved_halfmove = last_move.get("halfmove_clock", 0)
+            pos_key = last_move.get("pos_key")
+
+            # Remove position from history
+            if pos_key in self.position_counts:
+                self.position_counts[pos_key] -= 1
+                if self.position_counts[pos_key] == 0:
+                    del self.position_counts[pos_key]
+
+            if self.position_history:
+                self.position_history.pop()
 
             if was_castling == "kingside":
                 self.board.board[start_row][start_col] = piece  # Restore the king
@@ -402,11 +413,48 @@ class Game:
                 else:
                     self.board.black_king = (start_row, start_col)
 
+            # Restore the king and rook moved flags
+            if king_moved:
+                self.board.king_moved = king_moved
+            if rook_moved:
+                self.board.rook_moved = rook_moved
+
+            # Restore halfmove clock
+            self.halfmove_clock = saved_halfmove
+
             # Switch the turn back
             self.turn = "b" if self.turn == "w" else "w"
 
             # Add this move to the future moves stack
             self.future_moves.append(last_move)
+
+            # Recompute current position key
+            current_key = self.get_position_key()
+            self.position_history.append(current_key)
+            self.position_counts[current_key] = (
+                self.position_counts.get(current_key, 0) + 1
+            )
+
+    def undo_turn(self):
+        """
+        Undo in PVC.
+        - If AI has already moved, undo both (AI + player).
+        - If AI hasn't moved yet, undo only the player's move.
+        """
+        if not self.move_history:
+            return
+
+        if self.ai_moved:
+            # Undo AI's move first
+            self.undo_move()
+            # Undo player's move
+            if self.move_history:
+                self.undo_move()
+            # Reset AI moved flag
+            self.ai_moved = False
+        else:
+            # Only player's move to undo
+            self.undo_move()
 
     def advance_move(self):
         """ "
@@ -427,6 +475,11 @@ class Game:
             was_promotion = next_move.get("promotion", False)
             king_moved = next_move.get("king_moved", None)
             rook_moved = next_move.get("rook_moved", None)
+            saved_halfmove = next_move.get("halfmove_clock", 0)
+            pos_key = next_move.get("pos_key")
+
+            # Restore halfmove clock
+            self.halfmove_clock = saved_halfmove
 
             # Move the piece to its new position
             self.board.board[end_row][end_col] = piece
@@ -495,6 +548,32 @@ class Game:
 
             # Add this move back to the move history
             self.move_history.append(next_move)
+
+            # Recompute current position key
+            current_key = self.get_position_key()
+            self.position_history.append(current_key)
+            self.position_counts[current_key] = (
+                self.position_counts.get(current_key, 0) + 1
+            )
+
+    def redo_turn(self):
+        """
+        Redo in PVC.
+        - If AI had already moved before the undo, redo both (player + AI).
+        - If AI hadn't moved yet, redo only the player's move.
+        """
+        if not self.future_moves:
+            return
+
+        if self.ai_moved:
+            # Redo player's move
+            self.advance_move()
+            # Redo AI's move
+            if self.future_moves:
+                self.advance_move()
+        else:
+            # Only redo player's move
+            self.advance_move()
 
     def ask_promotion_choice(self, pawn: Pawn, end_move: Tuple[int, int]) -> Piece:
         """
@@ -874,29 +953,36 @@ class Game:
         elif event.key == pygame.K_RETURN:
             self.__init__()
             self.run(self.game_mode)
+
         elif event.key == pygame.K_z:
             message = f'{"White" if self.turn == "w" else "Black"} Surrender!'
             self.running = False
             self.endgame(message, self.turn)
+
         elif event.key == pygame.K_s:
             self.show_valid_moves = not self.show_valid_moves
+
         elif event.key == pygame.K_c:
-            self.undo_move()
+            if self.game_mode == "pvc":
+                self.undo_turn()
+            else:
+                self.undo_move()
+
         elif event.key == pygame.K_v:
-            self.advance_move()
+            if self.game_mode == "pvc":
+                self.redo_turn()
+            else:
+                self.advance_move()
 
     def perform_move(self, row: int, col: int) -> None:
         """
         Executes a move for the selected piece and updates the game state.
-
-        This includes storing the move in history (with details for undo/redo), moving the piece,
-        handling special moves (castling, en passant, promotion), and switching turns.
-
-        Args:
-            row (int): The destination row.
-            col (int): The destination column.
+        Handles history (undo/redo), special moves, and switching turns.
         """
         self.future_moves.clear()
+
+        if self.game_mode == "pvc" and self.turn == self.computer_player.color:
+            self.ai_moved = False
 
         start_pos = (self.selected_piece.row, self.selected_piece.col)
         self.was_there_enemy = self.board.board[row][col] is not None
@@ -920,6 +1006,37 @@ class Game:
         king_moved = self.board.king_moved.copy()
         rook_moved = self.board.rook_moved.copy()
 
+        # Save halfmove_clock BEFORE the move (so undo can restore it)
+        saved_halfmove = self.halfmove_clock
+
+        # Update halfmove_clock for AFTER this move
+        if isinstance(self.selected_piece, Pawn) or self.was_there_enemy:
+            self.halfmove_clock = 0
+        else:
+            self.halfmove_clock += 1
+
+        # --- APPLY THE MOVE ON THE BOARD ---
+        self.board.move_piece(
+            self.selected_piece,
+            start_pos,
+            (row, col),
+            (prev_piece, prev_start, prev_end),
+            self,
+        )
+
+        # Update selected piece coordinates
+        self.selected_piece.row = row
+        self.selected_piece.col = col
+
+        # Switch turn AFTER applying the move
+        self.turn = "b" if self.turn == "w" else "w"
+
+        # Now compute position key for the new board+turn
+        pos_key = self.get_position_key()
+        self.position_history.append(pos_key)
+        self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
+
+        # Record move AFTER applying it
         self.move_history.append(
             {
                 "piece": self.selected_piece,
@@ -936,33 +1053,19 @@ class Game:
                 "king_moved": king_moved,
                 "rook_moved": rook_moved,
                 "promotion": promotion_move,
+                "halfmove_clock": saved_halfmove,  # stored pre-move value
+                "pos_key": pos_key,  # stored post-move key
             }
         )
 
-        self.board.move_piece(
-            self.selected_piece,
-            start_pos,
-            (row, col),
-            (prev_piece, prev_start, prev_end),
-            self,
-        )
-
+        # Update UI helpers
         self.last_move_piece = self.selected_piece
         self.last_move_start = start_pos
         self.last_move_end = (row, col)
 
-        self.selected_piece.row = row
-        self.selected_piece.col = col
-        self.turn = "b" if self.turn == "w" else "w"
-
-        pos_key = self.get_position_key()
-        self.position_history.append(pos_key)
-        self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
-
-        if isinstance(self.selected_piece, Pawn) or self.was_there_enemy:
-            self.halfmove_clock = 0
-        else:
-            self.halfmove_clock += 1
+        if self.game_mode == "pvc" and self.computer_player:
+            if self.turn == self.computer_player.color:
+                self.ai_moved = False
 
         self.board.draw(self.screen, self.flipped)
         self.board.highlight_last_move(
@@ -988,91 +1091,98 @@ class Game:
                 return  # Prevent AI from moving multiple times in a row in PvC mode
 
             move = self.computer_player.get_best_move(self.board)
-            if move:
-                start_pos, end_pos = move
-                row, col = end_pos
-                piece = self.board.board[start_pos[0]][start_pos[1]]
+            if not move:
+                return
 
-                # Store the AI's last move for highlighting
-                self.last_move_start = start_pos
-                self.last_move_end = end_pos
-                self.was_there_enemy = (
-                    self.board.board[end_pos[0]][end_pos[1]] is not None
-                )  # Check if capture happened
+            start_pos, end_pos = move
+            row, col = end_pos
+            piece = self.board.board[start_pos[0]][start_pos[1]]
 
-                captured_piece = self.get_captured_piece(
-                    piece, row, col, prev_piece, prev_start, prev_end
+            # Store the AI's last move for highlighting
+            self.last_move_start = start_pos
+            self.last_move_end = end_pos
+            self.was_there_enemy = self.board.board[row][col] is not None
+
+            captured_piece = self.get_captured_piece(
+                piece, row, col, prev_piece, prev_start, prev_end
+            )
+
+            castling_move = isinstance(piece, King) and self.board.is_castle(
+                piece, (piece.row, piece.col), (row, col)
+            )
+
+            promotion_move = isinstance(piece, Pawn) and (
+                (piece.color == "w" and row == 0) or (piece.color == "b" and row == 7)
+            )
+
+            king_moved = self.board.king_moved.copy()
+            rook_moved = self.board.rook_moved.copy()
+
+            # Save halfmove clock BEFORE applying this move
+            saved_halfmove = self.halfmove_clock
+
+            # Apply move on the board
+            self.board.move_piece(
+                piece, start_pos, end_pos, (prev_piece, prev_start, prev_end)
+            )
+
+            # Update piece coordinates
+            piece.row, piece.col = row, col
+
+            # Switch turn AFTER applying move
+            self.turn = "b" if self.turn == "w" else "w"
+
+            # Update halfmove clock for AFTER this move
+            if isinstance(piece, Pawn) or self.was_there_enemy:
+                self.halfmove_clock = 0
+            else:
+                self.halfmove_clock += 1
+
+            # Compute new position key (after move + new turn)
+            pos_key = self.get_position_key()
+            self.position_history.append(pos_key)
+            self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
+
+            # Save move to history
+            self.move_history.append(
+                {
+                    "piece": piece,
+                    "start": start_pos,
+                    "end": (row, col),
+                    "captured": captured_piece,
+                    "en_passant": self.board.is_en_passant(
+                        piece,
+                        (piece.row, piece.col),
+                        (row, col),
+                        (prev_piece, prev_start, prev_end),
+                    ),
+                    "castling": castling_move,
+                    "king_moved": king_moved,
+                    "rook_moved": rook_moved,
+                    "promotion": promotion_move,
+                    "halfmove_clock": saved_halfmove,
+                    "pos_key": pos_key,
+                }
+            )
+
+            # Handle mode flags
+            if self.game_mode == "cvc":
+                self.computer_player = (
+                    self.computer_white if self.turn == "w" else self.computer_black
                 )
+            else:
+                self.ai_moved = True  # Prevent double move in PvC
 
-                castling_move = isinstance(piece, King) and self.board.is_castle(
-                    piece,
-                    (piece.row, piece.col),
-                    (row, col),
-                )
+            # Draw + highlight
+            self.board.draw(self.screen, self.flipped)
+            self.board.highlight_last_move(
+                self.screen,
+                (self.last_move_start, self.last_move_end),
+                self.was_there_enemy,
+                flipped=self.flipped,
+            )
 
-                promotion_move = isinstance(piece, Pawn) and (
-                    (piece.color == "w" and row == 0)
-                    or (piece.color == "b" and row == 7)
-                )
-
-                king_moved = self.board.king_moved.copy()
-                rook_moved = self.board.rook_moved.copy()
-
-                self.move_history.append(
-                    {
-                        "piece": piece,
-                        "start": start_pos,
-                        "end": (row, col),
-                        "captured": captured_piece,
-                        "en_passant": self.board.is_en_passant(
-                            piece,
-                            (piece.row, piece.col),
-                            (row, col),
-                            (prev_piece, prev_start, prev_end),
-                        ),
-                        "castling": castling_move,
-                        "king_moved": king_moved,
-                        "rook_moved": rook_moved,
-                        "promotion": promotion_move,
-                    }
-                )
-
-                self.board.move_piece(
-                    piece, start_pos, end_pos, (prev_piece, prev_start, prev_end)
-                )
-
-                # Switch the turn after the move
-                self.turn = "b" if self.turn == "w" else "w"
-
-                # In CVC Mode: Allow AI to continue playing without restriction
-                if self.game_mode == "cvc":
-                    self.computer_player = (
-                        self.computer_white if self.turn == "w" else self.computer_black
-                    )
-                else:
-                    # In PvC Mode: Prevent AI from moving twice in a row
-                    self.ai_moved = True
-
-                # Save new position for repetition check
-                pos_key = self.get_position_key()
-                self.position_history.append(pos_key)
-                self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
-
-                if isinstance(piece, Pawn) or self.was_there_enemy:
-                    self.halfmove_clock = 0
-                else:
-                    self.halfmove_clock += 1
-
-                self.board.draw(self.screen, self.flipped)
-
-                self.board.highlight_last_move(
-                    self.screen,
-                    (self.last_move_start, self.last_move_end),
-                    self.was_there_enemy,
-                    flipped=self.flipped,
-                )
-
-                self.check_game_status()
+            self.check_game_status()
 
     def run(self, mode: str) -> None:
         """
@@ -1117,7 +1227,7 @@ class Game:
                     if not self.ai_moved:
                         self.computer_move()
                 else:
-                    self.ai_moved = False
+                    pass
 
             elif self.game_mode == "cvc":
                 # Both AI players take turns automatically
