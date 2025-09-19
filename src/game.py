@@ -597,12 +597,10 @@ class Game:
                 )
 
                 # ✅ Use flipped row/col for correct square color
-                draw_row = ROWS - 1 - temp_row if self.flipped else temp_row
-                draw_col = COLS - 1 - temp_col if self.flipped else temp_col
-
-                square_color = (
-                    LIGHT_BROWN if (draw_row + draw_col) % 2 == 0 else DARK_BROWN
+                square_color = self.board.get_square_color(
+                    temp_row, temp_col, self.flipped
                 )
+
                 pygame.draw.rect(
                     self.screen,
                     square_color,

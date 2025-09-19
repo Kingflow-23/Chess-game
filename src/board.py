@@ -128,6 +128,14 @@ class Board:
                 if piece:
                     piece.draw(self, screen, flipped)
 
+    def get_square_color(
+        self, row: int, col: int, flipped: bool = False
+    ) -> Tuple[int, int, int]:
+        """Return the correct color of a square (row, col), respecting perspective."""
+        if flipped:
+            return LIGHT_BROWN if (row + col) % 2 != 0 else DARK_BROWN
+        return LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
+
     def to_screen_coords(
         self, row: int, col: int, flipped: bool = False
     ) -> Tuple[int, int]:
