@@ -51,7 +51,7 @@ class Board:
 
     def create_board(self) -> List[List[Optional[Piece]]]:
         """
-        Initializes the board with chess pieces in their standard starting positions.
+        Creates the initial chessboard setup with pieces in their starting positions.
 
         Returns:
             List[List[Optional[Piece]]]: A 2D list representing the chessboard with pieces
@@ -107,7 +107,11 @@ class Board:
                 x, y = self.to_screen_coords(row, col, flipped)
 
                 # Default square color
-                color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
+                if flipped:
+                    # Invert the colors when flipped
+                    color = LIGHT_BROWN if (row + col) % 2 != 0 else DARK_BROWN
+                else:
+                    color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
 
                 # Highlight king in red if in check
                 if (white_in_check and (row, col) == self.white_king) or (
