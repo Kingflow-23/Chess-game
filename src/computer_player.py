@@ -1,19 +1,30 @@
 from typing import Tuple, Optional, List
 
 from src.board import Board
-from src.pieces import King, Pawn
+from src.pieces import (
+    King,
+    Pawn,
+    Rook,
+    Queen,
+    Bishop,
+    Knight,
+)  # import all piece classes used
 
 
 class ComputerPlayer:
     """
-    Computer chess player using Minimax with Alpha-Beta pruning,
-    iterative deepening, piece-square table evaluation, and tactical awareness.
+    Computer chess player using Negamax (Negamax = Minimax in zero-sum symmetric form)
+    with alpha-beta pruning, quiescence search, iterative deepening, transposition table,
+    PST-based evaluation and light-weight make/undo for the search.
 
-    Attributes:
-        color (str): AI player's color, "w" or "b".
-        opponent_color (str): Opponent's color.
-        transposition_table (dict): Cache of board states and scores for faster evaluation.
+    Important behavior:
+      - Prefers faster mate (score = MATE_SCORE - depth).
+      - Applies a penalty to stalemate for side to move to avoid forcing stalemate when winning.
     """
+
+    # scoring constants
+    MATE_SCORE = 100000
+    STALEMATE_PENALTY = 30000  # penalty applied to the side that stalemates (encourages avoiding stalemate)
 
     # --- Class-level PSTs to avoid rebuilding each evaluation ---
     piece_values = {"p": 100, "n": 320, "b": 330, "r": 500, "q": 900, "k": 20000}
@@ -108,6 +119,9 @@ class ComputerPlayer:
         self.opponent_color = "w" if color == "b" else "b"
         self.transposition_table = {}  # Stores evaluated board states
 
+        # --- Position repetition tracking ---
+        self.position_counts = {}  # key: position key, value: occurrence count
+
     def board_hash(self, board: Board) -> int:
         """
         Generates a hash for the current board state.
@@ -126,6 +140,43 @@ class ComputerPlayer:
             for row in board.board
         )
         return hash(board_str)
+
+    def get_position_key(self, board: Board, turn: str) -> str:
+        # Piece placement
+        board_str = ""
+        for row in board.board:
+            for piece in row:
+                if piece:
+                    board_str += piece.color + piece.piece_type
+                else:
+                    board_str += "--"
+
+        # Castling rights (assumes board.rook_moved is a dict like {"w_kingside": False, ...})
+        castling_str = "".join([k for k, v in board.rook_moved.items() if not v]) or "-"
+
+        # En passant (only if a pawn can actually capture it)
+        en_passant_str = "-"
+        if getattr(board, "move_history", None):
+            last_move = board.move_history[-1]
+            if last_move["piece"].piece_type == "p":
+                start_row, start_col = last_move["start"]
+                end_row, end_col = last_move["end"]
+                if abs(start_row - end_row) == 2:
+                    ep_row = (start_row + end_row) // 2
+                    ep_col = start_col
+                    for dc in [-1, 1]:
+                        adj_col = ep_col + dc
+                        if 0 <= adj_col < 8:
+                            adj_piece = board.board[ep_row][adj_col]
+                            if (
+                                adj_piece
+                                and adj_piece.color != last_move["piece"].color
+                                and adj_piece.piece_type == "p"
+                            ):
+                                en_passant_str = f"{ep_row}{ep_col}"
+                                break
+
+        return f"{board_str}_{turn}_{castling_str}_{en_passant_str}"
 
     # --- Lightweight move/undo for AI search ---
     def make_move_light(
@@ -182,7 +233,7 @@ class ComputerPlayer:
         # --- Handle promotion ---
         if isinstance(piece, Pawn) and (end[0] == 0 or end[0] == 7):
             move_info["promotion"] = piece
-            board.board[end[0]][end[1]] = Pawn(
+            board.board[end[0]][end[1]] = Queen(
                 end[0], end[1], piece.color
             )  # or a Queen
             piece = board.board[end[0]][end[1]]
@@ -412,7 +463,9 @@ class ComputerPlayer:
 
         return score
 
-    def quiescence(self, board: Board, alpha: float, beta: float, color: str) -> int:
+    def quiescence(
+        self, board: Board, alpha: float, beta: float, color: str, depth: int = 0
+    ) -> int:
         """
         Performs quiescence search to reduce horizon effect.
 
@@ -421,6 +474,7 @@ class ComputerPlayer:
             alpha (float): Alpha value for pruning.
             beta (float): Beta value for pruning.
             color (str): Color to move.
+            depth (int): Current depth in quiescence search.
 
         Returns:
             int: Evaluated score.
@@ -435,73 +489,184 @@ class ComputerPlayer:
         if alpha < stand_pat:
             alpha = stand_pat
 
-        # Generate only capture moves
+        # Generate captures + checks
         moves = self.get_all_moves(board, color)
-        capture_moves = [
-            move for move in moves if board.board[move[1][0]][move[1][1]] is not None
-        ]
 
-        for move in capture_moves:
+        if not moves:
+            # No legal moves -> mate or stalemate
+            if board.is_check(color):
+                # side to move is checkmated -> huge negative (from perspective of side to move)
+                return -self.MATE_SCORE + depth
+            else:
+                # stalemate -> draw
+                return 0
+
+        capture_or_check_moves = []
+
+        for move in moves:
+            target_piece = board.board[move[1][0]][move[1][1]]
+
+            if target_piece is not None:
+                capture_or_check_moves.append(move)
+
+            else:
+                # If the move results in a check, include it
+                move_info = self.make_move_light(board, move[0], move[1])
+                is_check = board.is_check("b" if color == "w" else "w")
+                self.undo_move_light(board, move_info)
+                if is_check:
+                    capture_or_check_moves.append(move)
+
+        # Search them
+        for move in capture_or_check_moves:
             move_info = self.make_move_light(board, move[0], move[1])
-            score = -self.quiescence(board, -beta, -alpha, "b" if color == "w" else "w")
+            score = -self.quiescence(
+                board, -beta, -alpha, "b" if color == "w" else "w", depth + 1
+            )
             self.undo_move_light(board, move_info)
 
             if score >= beta:
                 return beta
+
             alpha = max(alpha, score)
 
         return alpha
 
     def negamax(
-        self, board: Board, depth: int, alpha: float, beta: float, color: str
+        self,
+        board: Board,
+        depth: int,
+        alpha: float,
+        beta: float,
+        color: str,
     ) -> Tuple[int, Optional[Tuple[Tuple[int, int], Tuple[int, int]]]]:
         """
-        Negamax search with alpha-beta pruning.
+        Negamax search with alpha-beta pruning, repetition handling, and transposition table.
+
+        This function evaluates chess positions recursively using the negamax framework,
+        which is equivalent to minimax but exploits symmetry to simplify logic.
+        Scores are always returned from the perspective of the player to move.
 
         Args:
-            board (Board): Current board.
-            depth (int): Remaining depth.
-            alpha (float): Alpha value.
-            beta (float): Beta value.
-            color (str): Color to move.
+            board (Board): The current board state.
+            depth (int): Remaining depth to search.
+            alpha (float): Alpha bound for alpha-beta pruning (lower bound).
+            beta (float): Beta bound for alpha-beta pruning (upper bound).
+            color (str): Side to move ("w" or "b").
 
         Returns:
-            Tuple[int, Optional[Tuple[start,end]]]: (Score, best move)
+            Tuple[int, Optional[Tuple[start, end]]]:
+                - The best evaluation score achievable from this position.
+                - The corresponding best move (as ((row_from, col_from), (row_to, col_to))),
+                or None if no move is available.
+
+        Key Features:
+            - **Repetition handling:**
+                - Threefold repetition → treated as a draw (returns -STALEMATE_PENALTY).
+                - Twofold repetition → discouraged with a soft penalty (-400 by default).
+                - This prevents the engine from intentionally forcing perpetual checks
+                unless there is no better option.
+
+            - **Transposition table (TT):**
+                - Uses a hash of the board position for caching evaluations.
+                - If the position is already evaluated, returns the stored score/move
+                adjusted for any repetition penalty.
+
+            - **Terminal conditions:**
+                - Depth == 0 → fall back to quiescence search for tactical stability.
+                - No legal moves:
+                    - If in check → checkmate (score = -MATE_SCORE + depth).
+                    - Else → stalemate (score = -STALEMATE_PENALTY).
+
+            - **Alpha-beta pruning:**
+                - Cuts off branches when `alpha >= beta` to improve efficiency.
+
+            - **Mate scoring:**
+                - Checkmate is scored as `-MATE_SCORE + depth` (the sooner the mate,
+                the higher the score for the mating side).
+                - This ensures the engine prefers faster mates and delays being mated.
+
+            - **Repetition penalty application:**
+                - Applied consistently at all levels (leaf and recursive nodes).
+                - Soft discouragement avoids draw loops unless forced.
+
         """
+        # --- Generate position key ---
+        pos_key = self.get_position_key(board, color)
+        self.position_counts[pos_key] = self.position_counts.get(pos_key, 0) + 1
+
+        repeat_count = self.position_counts[pos_key]
+
+        # --- Handle repetition explicitly ---
+        if repeat_count >= 3:
+            # Threefold repetition = draw → treat as stalemate
+            self.position_counts[pos_key] -= 1
+            return -self.STALEMATE_PENALTY, None
+
+        elif repeat_count == 2:
+            # Apply soft penalty to discourage repetition loops
+            repetition_penalty = 400
+
+        else:
+            repetition_penalty = 0
+
+        # --- Transposition table ---
         board_key = hash(
             str([[p.piece_type if p else "-" for p in r] for r in board.board])
         )
         if board_key in self.transposition_table:
-            return self.transposition_table[board_key]
+            self.position_counts[pos_key] -= 1
+            stored_eval, stored_move = self.transposition_table[board_key]
+            return stored_eval - repetition_penalty, stored_move
 
+        # --- Depth 0: quiescence search ---
         if depth == 0:
-            score = self.quiescence(board, alpha, beta, color)
+            score = self.quiescence(board, alpha, beta, color) - repetition_penalty
             self.transposition_table[board_key] = (score, None)
+            self.position_counts[pos_key] -= 1
             return score, None
 
+        # --- Generate moves ---
         moves = self.get_all_moves(board, color)
         if not moves:
-            score = -100000 if board.is_check(color) else 0
+            if board.is_check(color):
+                score = -self.MATE_SCORE + depth
+            else:
+                score = -self.STALEMATE_PENALTY
             self.transposition_table[board_key] = (score, None)
+            self.position_counts[pos_key] -= 1
             return score, None
 
         best_move = None
         max_eval = float("-inf")
+
         for move in moves:
             move_info = self.make_move_light(board, move[0], move[1])
             eval_score, _ = self.negamax(
-                board, depth - 1, -beta, -alpha, "b" if color == "w" else "w"
+                board,
+                depth - 1,
+                -beta,
+                -alpha,
+                "b" if color == "w" else "w",
             )
             eval_score = -eval_score
             self.undo_move_light(board, move_info)
+
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
+
             alpha = max(alpha, eval_score)
             if alpha >= beta:
                 break
 
+        # Store in TT with penalty included
+        max_eval -= repetition_penalty
         self.transposition_table[board_key] = (max_eval, best_move)
+
+        # Decrement repetition count after recursion
+        self.position_counts[pos_key] -= 1
+
         return max_eval, best_move
 
     def get_all_moves(
@@ -558,10 +723,14 @@ class ComputerPlayer:
             Optional[Tuple[start, end]]: Best move found.
         """
         best_move = None
-        for depth in range(1, max_depth + 1):
+        for depth in range(2, max_depth + 1):
             score, move = self.negamax(
                 board, depth, float("-inf"), float("inf"), self.color
             )
             if move:
                 best_move = move
+
+            if score >= self.MATE_SCORE - 10:
+                break
+
         return best_move
